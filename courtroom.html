@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Courtroom - Case Closed</title>
+    <link rel="stylesheet" href="style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/genai": "https://esm.run/@google/genai"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="app-container">
+      <main id="main-content">
+        <div class="courtroom-grid">
+          <div id="witness-stand" class="panel">
+            <h2 class="panel-title">Witness Stand</h2>
+            <p id="witness-stand-prompt">Call a witness to begin the interrogation.</p>
+            <div id="witness-info" class="hidden">
+              <h3 id="witness-name"></h3>
+              <p id="witness-role"></p>
+            </div>
+          </div>
+
+          <div id="defense-desk" class="panel">
+            <h2 class="panel-title">Defense</h2>
+            <p>The accused, <strong id="accused-name"></strong>, awaits the proceedings.</p>
+          </div>
+
+          <div id="dialogue-box" class="panel">
+            <!-- Dialogue entries will be added here by JS -->
+          </div>
+
+          <div id="prosecutor-desk" class="panel">
+            <h2 class="panel-title">Prosecutor's Desk</h2>
+            <div id="game-controls" class="prosecutor-controls">
+              <form id="interrogation-form">
+                <input
+                  type="text"
+                  id="interrogation-input"
+                  placeholder="Ask your question..."
+                  autocomplete="off"
+                  required
+                  disabled
+                />
+                <div class="control-buttons">
+                  <button type="submit" id="ask-btn" class="menu-btn" disabled>Ask</button>
+                </div>
+              </form>
+              <div class="control-buttons">
+                <button id="call-witness-btn" class="menu-btn">Call Witness</button>
+                <button id="present-evidence-btn" class="menu-btn" disabled>Present Evidence</button>
+                <button id="make-accusation-btn" class="menu-btn">Make Accusation</button>
+              </div>
+            </div>
+             <div id="end-game-controls" class="prosecutor-controls hidden">
+                <p id="end-game-message"></p>
+                <button id="play-again-btn" class="menu-btn">Return to Main Menu</button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Witness Selection Modal -->
+    <div id="witness-modal-overlay" class="modal-overlay hidden">
+      <div class="modal-content">
+        <h2 class="panel-title">Select a Witness</h2>
+        <ul id="witness-selection-list" class="witness-selection-list">
+          <!-- Witness list items will be added here by JS -->
+        </ul>
+        <button id="close-witness-modal-btn" class="menu-btn" style="margin-top: 1rem;">Cancel</button>
+      </div>
+    </div>
+    
+    <!-- Accusation Modal -->
+    <div id="accusation-modal-overlay" class="modal-overlay hidden">
+      <div class="modal-content">
+        <h2 class="panel-title">Who is the Culprit?</h2>
+        <p>Select the character you believe committed the crime.</p>
+        <ul id="accusation-selection-list" class="witness-selection-list">
+          <!-- Character list will be added here by JS -->
+        </ul>
+        <button id="close-accusation-modal-btn" class="menu-btn" style="margin-top: 1rem;">Cancel</button>
+      </div>
+    </div>
+
+    <script type="module" src="courtroom.js"></script>
+  </body>
+</html>
