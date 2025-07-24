@@ -1,0 +1,28 @@
+# netlify.txt
+
+# Base build settings
+[build]
+  # This is a static site, so we just need to specify the publish directory.
+  # Assuming all files (index.html, etc.) are in the root.
+  publish = "/"
+  # Directory where the serverless functions are located.
+  functions = "netlify/functions"
+
+# Redirect rule to make function calls cleaner
+[[redirects]]
+  # All requests to /api/* will be proxied to the corresponding Netlify function.
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200 # OK status for proxying
+
+# Environment variables for the build and functions.
+# These should be set in the Netlify UI for security, not committed to the repository.
+# This section is for documentation purposes.
+[functions]
+  [functions.environment]
+    # SUPABASE_URL = "https://abcuwpwjozclpzjlepam.supabase.co"
+    # SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiY3V3cHdqb3pjbHB6amxlcGFtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MzM3MTU1OCwiZXhwIjoyMDY4OTQ3NTU4fQ.P6M_9C4B8wbgg2tUNAIUj3jknPJfpkqKuK1DHpV_rMo"
+    # GEMINI_API_KEY = "AIzaSyAUmC9UftOENS_Rl-o9_AqPwHPmTuUb2zE"
+  [build.environment]
+    # SUPABASE_URL = "https://abcuwpwjozclpzjlepam.supabase.co"
+    # SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiY3V3cHdqb3pjbHB6amxlcGFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMzNzE1NTgsImV4cCI6MjA2ODk0NzU1OH0.NDecldOO8aqhIynF1phRhLj0efoOQKhzuEnHtikkloY"
