@@ -1,42 +1,30 @@
-
-
 import { createClient } from '@supabase/supabase-js';
 
 /**
  * Case Closed: The AI Detective
- * Main menu, authentication, and case generation logic.
+ * Main menu, authentication state, and case generation logic.
  */
 
 // --- Supabase Client ---
-// These are public-facing keys, safe to be exposed in a browser.
-// They should be set as environment variables in your Netlify build settings.
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // --- State ---
 let currentUser = null;
-let authModalMode = 'signIn'; // 'signIn' or 'signUp'
-
 
 // --- DOM Elements ---
 const authNav = document.getElementById('auth-nav');
 const mainMenuContent = document.getElementById('main-menu-content');
 const subtitleEl = document.querySelector('.subtitle');
 
-// Auth Modal Elements
-const authModalOverlay = document.getElementById('auth-modal-overlay');
-const authModalTitle = document.getElementById('auth-modal-title');
-const authForm = document.getElementById('auth-form');
-const authEmailInput = document.getElementById('auth-email');
-const authPasswordInput = document.getElementById('auth-password');
-const authErrorMessage = document.getElementById('auth-error-message');
-const cancelAuthBtn = document.getElementById('cancel-auth-btn');
-const submitAuthBtn = document.getElementById('submit-auth-btn');
-
 
 // --- UI Update Functions ---
 
+/**
+ * Updates the header navigation based on user's auth state.
+ * @param {object|null} user - The Supabase user object or null.
+ */
 function updateUIForAuthState(user) {
   if (user) {
     // Logged-in state
@@ -45,84 +33,23 @@ function updateUIForAuthState(user) {
       <span class="separator">/</span>
       <button id="signout-btn">Sign Out</button>
     `;
-    mainMenuContent.innerHTML = `
-      <div class="menu-buttons">
-        <button id="start-new-case-btn" class="menu-btn">Start New Case</button>
-        <button id="case-files-btn" class="menu-btn" disabled>Case Files</button>
-      </div>
-    `;
     document.getElementById('signout-btn').addEventListener('click', handleSignOut);
-    document.getElementById('start-new-case-btn').addEventListener('click', handleStartNewCase);
   } else {
     // Logged-out ("Guest") state
     authNav.innerHTML = `
-      <button id="signin-link">Sign In</button>
+      <a href="signin.html">Sign In</a>
       <span class="separator">/</span>
-      <button id="signup-link">Create Account</button>
+      <a href="signup.html">Create Account</a>
     `;
-    mainMenuContent.innerHTML = `
-        <div class="menu-buttons">
-          <button id="start-new-case-btn" class="menu-btn">Start New Case</button>
-          <button id="case-files-btn" class="menu-btn" disabled>Case Files (Sign in to use)</button>
-        </div>
-        <p class="auth-prompt">Play as a guest, or sign in to save your cases.</p>
-    `;
-    document.getElementById('signin-link').addEventListener('click', () => showAuthModal('signIn'));
-    document.getElementById('signup-link').addEventListener('click', () => showAuthModal('signUp'));
-    document.getElementById('start-new-case-btn').addEventListener('click', handleStartNewCase);
   }
 }
 
-function showAuthModal(mode) {
-    authModalMode = mode;
-    authErrorMessage.classList.add('hidden');
-    authForm.reset();
-
-    if (mode === 'signIn') {
-        authModalTitle.textContent = 'Sign In';
-        submitAuthBtn.textContent = 'Sign In';
-    } else {
-        authModalTitle.textContent = 'Create Account';
-        submitAuthBtn.textContent = 'Sign Up';
-    }
-    authModalOverlay.classList.remove('hidden');
-    authEmailInput.focus();
-}
-
-function hideAuthModal() {
-    authModalOverlay.classList.add('hidden');
-}
-
-
 // --- Authentication Handlers ---
 
-async function handleAuthSubmit(event) {
-    event.preventDefault();
-    const email = authEmailInput.value;
-    const password = authPasswordInput.value;
-    submitAuthBtn.disabled = true;
-    authErrorMessage.classList.add('hidden');
-
-    let response;
-    if (authModalMode === 'signUp') {
-        response = await supabase.auth.signUp({ email, password });
-    } else {
-        response = await supabase.auth.signInWithPassword({ email, password });
-    }
-
-    if (response.error) {
-        authErrorMessage.textContent = response.error.message;
-        authErrorMessage.classList.remove('hidden');
-    } else {
-        // Success, the onAuthStateChange listener will handle the UI update
-        hideAuthModal();
-    }
-    submitAuthBtn.disabled = false;
-}
-
 async function handleSignOut() {
-    await supabase.auth.signOut();
-    // onAuthStateChange listener will update the UI
+  await supabase.auth.signOut();
+  // onAuthStateChange listener will update the UI, no redirect needed
+  window.location.reload(); // Force a refresh to ensure state is clean
 }
 
 // --- Case Generation ---
@@ -158,7 +85,7 @@ async function handleStartNewCase() {
 
     const newCase = await response.json();
 
-    if (newCase.id) { // Logged-in user: case was saved, has an id
+    if (currentUser && newCase.id) { // Logged-in user: case was saved, has an id
       window.location.href = `courtroom.html?case_id=${newCase.id}`;
     } else { // Guest user: case was not saved, store in session
       sessionStorage.setItem('guestCase', JSON.stringify(newCase));
@@ -182,9 +109,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
-  // Auth Modal Listeners
-  authForm.addEventListener('submit', handleAuthSubmit);
-  cancelAuthBtn.addEventListener('click', hideAuthModal);
+  // Add listener to the static "Start" button
+  document.getElementById('start-new-case-btn').addEventListener('click', handleStartNewCase);
 
   // Supabase Auth State Listener
   supabase.auth.onAuthStateChange((_event, session) => {

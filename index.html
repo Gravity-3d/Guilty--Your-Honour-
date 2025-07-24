@@ -26,26 +26,13 @@
         <h1 class="game-title">Case Closed</h1>
         <p class="subtitle">The AI Detective</p>
         <div id="main-menu-content">
-          <!-- Content changes based on auth state -->
-          <p class="auth-prompt">Please sign in to begin your investigation.</p>
+          <div class="menu-buttons">
+            <button id="start-new-case-btn" class="menu-btn">Start New Case</button>
+            <button id="case-files-btn" class="menu-btn" disabled>Case Files (Sign in to use)</button>
+          </div>
+          <p class="auth-prompt">Play as a guest, or sign in to save your cases.</p>
         </div>
       </main>
-    </div>
-
-    <!-- Auth Modals -->
-    <div id="auth-modal-overlay" class="modal-overlay hidden">
-      <div class="modal-content">
-        <h2 id="auth-modal-title" class="panel-title">Sign In</h2>
-        <form id="auth-form">
-          <input type="email" id="auth-email" class="auth-input" placeholder="Email" required autocomplete="email">
-          <input type="password" id="auth-password" class="auth-input" placeholder="Password" required autocomplete="current-password">
-          <p id="auth-error-message" class="error-message hidden"></p>
-          <div class="modal-buttons">
-            <button type="button" id="cancel-auth-btn" class="menu-btn">Cancel</button>
-            <button type="submit" id="submit-auth-btn" class="menu-btn">Sign In</button>
-          </div>
-        </form>
-      </div>
     </div>
 
     <script type="module" src="index.js"></script>
