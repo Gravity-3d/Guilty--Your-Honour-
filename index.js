@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 /**
@@ -60,9 +61,13 @@ function updateUIForAuthState(user) {
     `;
     mainMenuContent.innerHTML = `
         <p class="auth-prompt">Please sign in or create an account to begin your investigation.</p>
+        <div class="menu-buttons">
+            <button id="main-signin-btn" class="menu-btn">Sign In</button>
+        </div>
     `;
     document.getElementById('signin-link').addEventListener('click', () => showAuthModal('signIn'));
     document.getElementById('signup-link').addEventListener('click', () => showAuthModal('signUp'));
+    document.getElementById('main-signin-btn').addEventListener('click', () => showAuthModal('signIn'));
   }
 }
 
