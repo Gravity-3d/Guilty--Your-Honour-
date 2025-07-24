@@ -28,17 +28,20 @@
           </div>
 
           <div id="defense-desk" class="panel">
-            <h2 class="panel-title">Defense</h2>
-            <p>The accused, <strong id="accused-name"></strong>, awaits the proceedings.</p>
+            <h2 class="panel-title">Defense Desk</h2>
+            <p>The accused, <strong id="accused-name"></strong>, is represented by their counsel.</p>
+            <p>Accusation attempts remaining: <strong id="prosecutor-strikes">3</strong></p>
+            <p id="defense-attorney-status" class="system-message">The defense is observing...</p>
           </div>
 
           <div id="dialogue-box" class="panel">
             <!-- Dialogue entries will be added here by JS -->
           </div>
 
-          <div id="prosecutor-desk" class="panel">
-            <h2 class="panel-title">Prosecutor's Desk</h2>
-            <div id="game-controls" class="prosecutor-controls">
+          <div id="counsel-desk" class="panel">
+            <h2 class="panel-title">Counsel's Desk</h2>
+            <div id="turn-indicator" class="turn-indicator">Turn: Prosecutor (10 questions left)</div>
+            <div id="game-controls" class="counsel-controls">
               <form id="interrogation-form">
                 <input
                   type="text"
@@ -50,15 +53,16 @@
                 />
                 <div class="control-buttons">
                   <button type="submit" id="ask-btn" class="menu-btn" disabled>Ask</button>
+                  <button type="button" id="pass-btn" class="menu-btn" disabled>Pass</button>
                 </div>
               </form>
               <div class="control-buttons">
+                <button id="objection-btn" class="menu-btn" disabled>Objection!</button>
                 <button id="call-witness-btn" class="menu-btn">Call Witness</button>
-                <button id="present-evidence-btn" class="menu-btn" disabled>Present Evidence</button>
-                <button id="make-accusation-btn" class="menu-btn">Make Accusation</button>
+                <button id="accuse-btn" class="menu-btn">Accuse!</button>
               </div>
             </div>
-             <div id="end-game-controls" class="prosecutor-controls hidden">
+             <div id="end-game-controls" class="counsel-controls hidden">
                 <p id="end-game-message"></p>
                 <button id="play-again-btn" class="menu-btn">Return to Main Menu</button>
             </div>
@@ -87,6 +91,20 @@
           <!-- Character list will be added here by JS -->
         </ul>
         <button id="close-accusation-modal-btn" class="menu-btn" style="margin-top: 1rem;">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Reasoning Modal -->
+    <div id="reasoning-modal-overlay" class="modal-overlay hidden">
+      <div class="modal-content">
+        <h2 id="reasoning-modal-title" class="panel-title">State Your Reason</h2>
+        <form id="reasoning-form">
+          <textarea id="reasoning-textarea" required placeholder="Your reasoning..."></textarea>
+          <div class="modal-buttons">
+            <button type="button" id="cancel-reasoning-btn" class="menu-btn">Cancel</button>
+            <button type="submit" class="menu-btn">Submit</button>
+          </div>
+        </form>
       </div>
     </div>
 
