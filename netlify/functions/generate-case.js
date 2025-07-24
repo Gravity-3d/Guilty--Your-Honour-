@@ -39,13 +39,10 @@ IMPORTANT: The 'theAccused' and 'theCulprit' fields MUST refer to the same chara
 
 export default async (req, context) => {
     try {
-        // 1. Get user from Supabase auth context
-        const { user } = context.identityContext;
-        if (!user) {
-            return new Response(JSON.stringify({ error: 'Authentication required.' }), { status: 401 });
-        }
+        // User may be null if they are a guest
+        const { user } = context.identityContext || {};
 
-        // 2. Generate case file from Gemini AI
+        // 1. Generate case file from Gemini AI
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: "Generate a new detective case file. The accused person must be the actual culprit. Ensure the culprit has a lie or a flimsy alibi in their knowledge brief that could be defended, but make sure at least one other character has knowledge that directly contradicts the culprit's story. The case must be solvable through dialogue. Include a detailed case overview and initial statements for all characters.",
@@ -57,21 +54,27 @@ export default async (req, context) => {
         });
         const caseData = JSON.parse(response.text);
 
-        // 3. Save the new case to Supabase DB
-        const { data: newCase, error } = await supabase
-            .from('cases')
-            .insert({ user_id: user.sub, case_data: caseData })
-            .select()
-            .single();
+        // 2. Check if user is logged in
+        if (user) {
+            // If logged in, save the new case to Supabase DB and return the record
+            const { data: newCase, error } = await supabase
+                .from('cases')
+                .insert({ user_id: user.sub, case_data: caseData })
+                .select()
+                .single();
 
-        if (error) {
-            throw new Error(`Supabase error: ${error.message}`);
+            if (error) {
+                throw new Error(`Supabase error: ${error.message}`);
+            }
+            return new Response(JSON.stringify(newCase), {
+                headers: { 'Content-Type': 'application/json' },
+            });
+        } else {
+            // If user is a guest, just return the generated case data directly
+            return new Response(JSON.stringify(caseData), {
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
-
-        // 4. Return the new case to the client
-        return new Response(JSON.stringify(newCase), {
-            headers: { 'Content-Type': 'application/json' },
-        });
 
     } catch (error) {
         console.error('Error in generate-case function:', error);

@@ -108,11 +108,8 @@ const getTranscriptSummaryConfig = (payload) => {
 // Main handler function
 export default async (req, context) => {
   try {
-    // Authenticate user
-    const { user } = context.identityContext;
-    if (!user) {
-      return new Response(JSON.stringify({ error: 'Authentication required.' }), { status: 401 });
-    }
+    // This endpoint is public to allow guest play.
+    // The AI actions themselves are stateless and do not modify user-specific data directly.
 
     const payload = await req.json();
     const { action } = payload;
@@ -143,7 +140,6 @@ export default async (req, context) => {
         ...aiConfig
     });
     
-    // Check if the response should be JSON
     const isJson = aiConfig.config.responseMimeType === 'application/json';
     const responseData = isJson ? JSON.parse(response.text) : response.text;
 

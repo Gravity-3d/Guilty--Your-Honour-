@@ -2,7 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 
 /**
  * Case Closed: The AI Detective
- * Courtroom scene logic for turn-based debate, powered by a Supabase backend.
+ * Courtroom scene logic for turn-based debate, supporting both
+ * authenticated users (with DB persistence) and guests (with session storage).
  */
 
 // --- Supabase Client ---
@@ -15,7 +16,7 @@ const MAX_QUESTIONS_PER_TURN = 10;
 const MAX_ACCUSATIONS = 3;
 
 // --- State ---
-let caseId = null;
+let caseId = null; // Will be set for logged-in users
 let currentCase = null; // Will hold just case_data
 let currentTurnNumber = 1;
 let currentWitness = null;
@@ -29,7 +30,6 @@ let prosecutorAccusationAttempts = 0;
 let reasoningModalContext = { action: null, target: null, callback: null };
 
 // --- DOM Elements ---
-// (Same as before, list omitted for brevity)
 const accusedNameEl = document.getElementById('accused-name');
 const defenseAttorneyStatusEl = document.getElementById('defense-attorney-status');
 const prosecutorStrikesEl = document.getElementById('prosecutor-strikes');
@@ -66,7 +66,8 @@ const cancelReasoningBtn = document.getElementById('cancel-reasoning-btn');
 // --- Backend AI Handler ---
 
 /**
- * Generic function to call the backend AI handler.
+ * Generic function to call the backend AI handler. Works for both
+ * authenticated and guest users.
  * @param {string} action - The type of AI action to perform.
  * @param {object} payload - The data needed for the AI to perform the action.
  * @returns {Promise<any>} The data from the AI's response.
@@ -74,14 +75,15 @@ const cancelReasoningBtn = document.getElementById('cancel-reasoning-btn');
 async function callAiHandler(action, payload) {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error("Authentication required.");
+    
+    const headers = { 'Content-Type': 'application/json' };
+    if (session) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
 
     const response = await fetch('/api/ai-handler', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: headers,
       body: JSON.stringify({ action, ...payload }),
     });
 
@@ -96,7 +98,7 @@ async function callAiHandler(action, payload) {
     addSystemMessage(`A critical error occurred with the AI. ${error.message}`);
     isAiResponding = false;
     updateUI();
-    return null; // Return null to allow graceful failure
+    return null;
   }
 }
 
@@ -105,47 +107,63 @@ async function callAiHandler(action, payload) {
 async function loadCaseAndSetup() {
   const params = new URLSearchParams(window.location.search);
   caseId = params.get('case_id');
-  if (!caseId) {
-    addSystemMessage('No case ID found. Returning to main menu...');
-    setTimeout(() => window.location.href = 'index.html', 2000);
-    return;
-  }
 
-  // Fetch case data from Supabase
-  const { data: caseResult, error: caseError } = await supabase
-    .from('cases')
-    .select('*, transcripts(*)')
-    .eq('id', caseId)
-    .order('created_at', { referencedTable: 'transcripts', ascending: true })
-    .single();
+  if (caseId) {
+    // --- Logged-in User Flow: Load from Supabase ---
+    const { data: caseResult, error: caseError } = await supabase
+      .from('cases')
+      .select('*, transcripts(*)')
+      .eq('id', caseId)
+      .order('created_at', { referencedTable: 'transcripts', ascending: true })
+      .single();
 
-  if (caseError || !caseResult) {
-    addSystemMessage(`Error loading case: ${caseError?.message || 'Case not found.'}`);
-    isGameOver = true;
-    updateUI();
-    return;
-  }
+    if (caseError || !caseResult) {
+      addSystemMessage(`Error loading case: ${caseError?.message || 'Case not found.'}`);
+      isGameOver = true;
+      updateUI();
+      return;
+    }
 
-  currentCase = caseResult.case_data;
-  isGameOver = caseResult.is_complete;
-  
-  accusedNameEl.textContent = currentCase.theAccused;
-  prosecutorStrikesEl.textContent = MAX_ACCUSATIONS - prosecutorAccusationAttempts;
-
-  // Load existing transcript
-  dialogueBox.innerHTML = '';
-  debateTranscript = caseResult.transcripts.map(t => ({speaker: t.speaker, text: t.text, type: t.type}));
-  debateTranscript.forEach(entry => renderDialogueEntry(entry, false)); // Don't save, just render
-
-  if (debateTranscript.length === 0) {
-    displayInitialBriefing();
-  }
-
-  if (isGameOver) {
+    currentCase = caseResult.case_data;
+    isGameOver = caseResult.is_complete;
+    debateTranscript = caseResult.transcripts.map(t => ({speaker: t.speaker, text: t.text, type: t.type}));
+    
+    setupCourtroomUI();
+    
+    // Restore state from loaded data
+    debateTranscript.forEach(entry => renderDialogueEntry(entry, false));
+    if (debateTranscript.length === 0) {
+      displayInitialBriefing();
+    }
+    if (isGameOver) {
       endGame(caseResult.player_win, "This case has already been closed.");
+    }
+  } else {
+    // --- Guest User Flow: Load from Session Storage ---
+    const guestCaseJSON = sessionStorage.getItem('guestCase');
+    if (guestCaseJSON) {
+        currentCase = JSON.parse(guestCaseJSON);
+        isGameOver = false;
+        debateTranscript = []; // Guest always starts fresh
+        setupCourtroomUI();
+        displayInitialBriefing();
+    } else {
+        addSystemMessage('No case data found. Returning to main menu...');
+        setTimeout(() => window.location.href = 'index.html', 3000);
+        return;
+    }
   }
 
   updateUI();
+}
+
+/**
+ * Populates the UI with the initial case data.
+ */
+function setupCourtroomUI() {
+    accusedNameEl.textContent = currentCase.theAccused;
+    prosecutorStrikesEl.textContent = MAX_ACCUSATIONS - prosecutorAccusationAttempts;
+    dialogueBox.innerHTML = '';
 }
 
 function displayInitialBriefing() {
@@ -188,7 +206,7 @@ function renderDialogueEntry({ speaker, text, type }, saveToDb = true) {
   dialogueBox.appendChild(entryDiv);
   dialogueBox.scrollTop = dialogueBox.scrollHeight;
 
-  // Save the entry to the database if it's not a re-render
+  // Save the entry to the database ONLY if logged in and not a re-render
   if (saveToDb && type !== 'briefing') {
     saveTranscriptEntry({ speaker, text, type });
   }
@@ -204,6 +222,7 @@ function addSystemMessage(text) {
 }
 
 async function saveTranscriptEntry({ speaker, text, type }) {
+    if (!caseId) return; // Do not save for guests
     await supabase.from('transcripts').insert({
         case_id: caseId,
         speaker,
@@ -214,7 +233,7 @@ async function saveTranscriptEntry({ speaker, text, type }) {
 }
 
 // --- Core Game Logic ---
-// This section is heavily refactored to use callAiHandler
+// Unchanged - these call the AI handler which now supports guests
 
 async function getWitnessResponse(question) {
   const response = await callAiHandler('getWitnessResponse', { currentWitness, question });
@@ -264,7 +283,6 @@ async function runDefenseTurn() {
     defenseAttorneyStatusEl.textContent = "The defense is thinking...";
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // If no witness, defense will either pass or call one (latter is future feature)
     if (!currentWitness) {
         addDialogueEntry({ speaker: 'Defense', text: 'I have no questions without a witness. I pass.', type: 'defense' });
         setTimeout(nextTurn, 1500);
@@ -274,12 +292,12 @@ async function runDefenseTurn() {
     }
     
     const defenseMove = await getDefenseAction();
-    isAiResponding = false; // Allow UI interaction after getting the move
+    isAiResponding = false; 
 
     if (defenseMove.action === 'object' && lastQuestion.speaker === 'PROSECUTOR' && defenseMove.reason) {
-        await handleDefenseObjection(defenseMove.reason);
-        // After objection, let defense take another action immediately
-        setTimeout(runDefenseTurn, 1000); 
+        // Objections are not yet fully implemented for AI
+        addDialogueEntry({ speaker: 'Defense', text: defenseMove.question || "I pass.", type: 'defense' });
+        setTimeout(nextTurn, 1500);
     } else if (defenseMove.action === 'ask' && defenseMove.question) {
         const question = defenseMove.question;
         addDialogueEntry({ speaker: 'Defense', text: question, type: 'defense' });
@@ -308,7 +326,7 @@ async function runDefenseTurn() {
 }
 
 async function endGame(didWin, verdictMessage = '') {
-    if (isGameOver) return; // Prevent running twice
+    if (isGameOver) return;
     isGameOver = true;
     gameControls.classList.add('hidden');
     endGameControls.classList.remove('hidden');
@@ -321,14 +339,15 @@ async function endGame(didWin, verdictMessage = '') {
         addSystemMessage(verdictMessage || `You failed to prove your case. The culprit, ${currentCase.theCulprit}, gets away.`);
     }
 
-    // Update case in Supabase
-    await supabase.from('cases').update({ is_complete: true, player_win: didWin }).eq('id', caseId);
+    // Update case in Supabase only if it's a saved game
+    if (caseId) {
+        await supabase.from('cases').update({ is_complete: true, player_win: didWin }).eq('id', caseId);
+    }
+    // For guests, game ends here. Closing the tab will clear the session.
     updateUI();
 }
 
 // --- UI Management & Event Handlers ---
-// Most of this section remains the same, so it's condensed.
-// The key changes are in action handlers making async calls to the backend.
 
 function updateUI() {
     const questionsLeft = MAX_QUESTIONS_PER_TURN - questionsThisTurn;
@@ -422,9 +441,6 @@ async function handleFinalAccusation(accusedName, reason) {
     }
 }
 
-
-// All other helper functions (modals, etc.) and event listeners remain largely the same.
-// Condensed for brevity.
 function showWitnessModal() {
   if (isGameOver || isAiResponding) return;
   witnessSelectionList.innerHTML = '';
@@ -480,14 +496,12 @@ function handleAccusation(accusedName) {
         handleFinalAccusation(accusedName, reason);
     });
 }
-// etc...
 
 function setupEventListeners() {
     callWitnessBtn.addEventListener('click', showWitnessModal);
     closeWitnessModalBtn.addEventListener('click', hideWitnessModal);
     interrogationForm.addEventListener('submit', handlePlayerAsk);
     passBtn.addEventListener('click', nextTurn);
-    // objectionBtn and accuseBtn are more complex now
     accuseBtn.addEventListener('click', showAccusationModal);
     closeAccusationModalBtn.addEventListener('click', hideAccusationModal);
     playAgainBtn.addEventListener('click', () => { window.location.href = 'index.html'; });

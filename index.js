@@ -1,4 +1,5 @@
 
+
 import { createClient } from '@supabase/supabase-js';
 
 /**
@@ -53,21 +54,22 @@ function updateUIForAuthState(user) {
     document.getElementById('signout-btn').addEventListener('click', handleSignOut);
     document.getElementById('start-new-case-btn').addEventListener('click', handleStartNewCase);
   } else {
-    // Logged-out state
+    // Logged-out ("Guest") state
     authNav.innerHTML = `
       <button id="signin-link">Sign In</button>
       <span class="separator">/</span>
       <button id="signup-link">Create Account</button>
     `;
     mainMenuContent.innerHTML = `
-        <p class="auth-prompt">Please sign in or create an account to begin your investigation.</p>
         <div class="menu-buttons">
-            <button id="main-signin-btn" class="menu-btn">Sign In</button>
+          <button id="start-new-case-btn" class="menu-btn">Start New Case</button>
+          <button id="case-files-btn" class="menu-btn" disabled>Case Files (Sign in to use)</button>
         </div>
+        <p class="auth-prompt">Play as a guest, or sign in to save your cases.</p>
     `;
     document.getElementById('signin-link').addEventListener('click', () => showAuthModal('signIn'));
     document.getElementById('signup-link').addEventListener('click', () => showAuthModal('signUp'));
-    document.getElementById('main-signin-btn').addEventListener('click', () => showAuthModal('signIn'));
+    document.getElementById('start-new-case-btn').addEventListener('click', handleStartNewCase);
   }
 }
 
@@ -126,27 +128,8 @@ async function handleSignOut() {
 // --- Case Generation ---
 
 /**
- * Renders the case briefing screen.
- * @param {object} caseData - The case data to display.
- */
-function showCaseBriefing(caseData) {
-  const caseFile = caseData.case_data;
-  mainMenuContent.innerHTML = `
-    <div class="case-brief-container">
-      <h2 class="case-title">${caseFile.caseTitle}</h2>
-      <p class="case-brief-text">${caseFile.caseBrief}</p>
-      <div class="menu-buttons">
-        <button id="proceed-to-courtroom-btn" class="menu-btn">Proceed to Courtroom</button>
-      </div>
-    </div>
-  `;
-  document.getElementById('proceed-to-courtroom-btn').addEventListener('click', () => {
-    window.location.href = `courtroom.html?case_id=${caseData.id}`;
-  });
-}
-
-/**
- * Handles the click event for the "Start New Case" button.
+ * Handles the click event for the "Start New Case" button for both
+ * logged-in users and guests.
  */
 async function handleStartNewCase() {
   const startBtn = document.getElementById('start-new-case-btn');
@@ -156,18 +139,16 @@ async function handleStartNewCase() {
 
   try {
     const { data: userSession } = await supabase.auth.getSession();
-    if (!userSession.session) {
-      throw new Error("You must be logged in to start a case.");
-    }
+    const token = userSession.session?.access_token;
     
-    const token = userSession.session.access_token;
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
     
     const response = await fetch('/api/generate-case', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
+      headers: headers
     });
 
     if (!response.ok) {
@@ -176,7 +157,13 @@ async function handleStartNewCase() {
     }
 
     const newCase = await response.json();
-    showCaseBriefing(newCase);
+
+    if (newCase.id) { // Logged-in user: case was saved, has an id
+      window.location.href = `courtroom.html?case_id=${newCase.id}`;
+    } else { // Guest user: case was not saved, store in session
+      sessionStorage.setItem('guestCase', JSON.stringify(newCase));
+      window.location.href = 'courtroom.html';
+    }
 
   } catch (error) {
     console.error("Error starting new case:", error);
@@ -191,6 +178,7 @@ async function handleStartNewCase() {
 document.addEventListener('DOMContentLoaded', () => {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     subtitleEl.textContent = "Application is not configured. Missing Supabase details.";
+    mainMenuContent.innerHTML = ''; // Clear buttons if not configured
     return;
   }
 
