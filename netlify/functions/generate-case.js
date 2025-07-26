@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from '@supabase/supabase-js';
 
@@ -32,9 +33,13 @@ const caseSchema = {
     required: ["caseTitle", "caseBrief", "caseOverview", "theAccused", "theCulprit", "motive", "characters"]
   };
 
-const systemInstruction = `You are a creative writer for a noir detective game. Your task is to generate a complete, self-contained, and solvable mystery case file in JSON format. The crimes should be lighthearted and low-stakes (e.g., stolen pies, sabotaged sculptures, etc.). The case must be logically solvable by finding contradictions in witness testimonies.
-
-IMPORTANT: The 'theAccused' and 'theCulprit' fields MUST refer to the same character. The game's premise is that the player prosecutes the correct person, who has an AI defense attorney. Ensure you provide a detailed caseOverview and an initialStatement for every character.`;
+const systemInstruction = `You are a creative writer for a noir detective game. Your task is to generate a complete, self-contained, and solvable mystery case file in JSON format.
+- The crimes must be lighthearted and low-stakes (e.g., stolen pies, sabotaged sculptures).
+- The case must be logically solvable by finding contradictions in witness testimonies.
+- IMPORTANT: The 'theAccused' and 'theCulprit' fields MUST refer to the same character. The game's premise is that the player prosecutes the correct person.
+- The culprit's 'knowledge' brief MUST contain a lie or a flimsy alibi.
+- At least one other character's 'knowledge' MUST directly contradict the culprit's story.
+- You must provide a detailed 'caseOverview' and an 'initialStatement' for every character.`;
 
 
 export default async (req, context) => {
@@ -45,7 +50,7 @@ export default async (req, context) => {
         // 1. Generate case file from Gemini AI
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: "Generate a new detective case file. The accused person must be the actual culprit. Ensure the culprit has a lie or a flimsy alibi in their knowledge brief that could be defended, but make sure at least one other character has knowledge that directly contradicts the culprit's story. The case must be solvable through dialogue. Include a detailed case overview and initial statements for all characters.",
+            contents: "Generate a new detective case file.",
             config: {
                 responseMimeType: "application/json",
                 responseSchema: caseSchema,
