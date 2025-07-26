@@ -1,91 +1,70 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-import { createClient } from '@supabase/supabase-js';
 
-// Initialize clients from environment variables
+import { GoogleGenAI } from "@google/genai";
+
+// Initialize AI client from environment variables
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-const caseSchema = {
-    type: Type.OBJECT,
-    properties: {
-      caseTitle: { type: Type.STRING, description: "A catchy, noir-style title for the case. e.g., 'The Case of the Contraband Cabbage'." },
-      caseBrief: { type: Type.STRING, description: "A 2-3 sentence brief of the crime. Introduce the setting and the core mystery." },
-      caseOverview: { type: Type.STRING, description: "A detailed paragraph describing the crime scene, undisputed facts, and context for the player before the trial starts." },
-      theCulprit: { type: Type.STRING, description: "The name of the character who is the true culprit. This must be one of the characters generated below." },
-      theAccused: { type: Type.STRING, description: "The name of the character accused of the crime. For this game, this MUST be the same person as theCulprit." },
-      motive: { type: Type.STRING, description: "A plausible, yet slightly silly, motive for the culprit." },
-      characters: {
-        type: Type.ARRAY,
-        description: "A list of exactly 3 characters involved in the case.",
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            name: { type: Type.STRING, description: "The character's full name." },
-            role: { type: Type.STRING, description: "The character's role or relationship to the case." },
-            knowledge: { type: Type.STRING, description: "Secret brief of what this character knows. The culprit's knowledge MUST contain a specific lie. One other character's knowledge MUST contradict that lie to make the case solvable." },
-            initialStatement: { type: Type.STRING, description: "A brief, one-sentence initial statement this character gave to investigators, which will be presented at the start of the trial."}
-          },
-          required: ["name", "role", "knowledge", "initialStatement"]
-        }
-      }
-    },
-    required: ["caseTitle", "caseBrief", "caseOverview", "theAccused", "theCulprit", "motive", "characters"]
-  };
-
-const systemInstruction = `You are a creative writer for a noir detective game. Your task is to generate a complete, self-contained, and solvable mystery case file in JSON format.
+const systemInstruction = `You are a creative writer for a noir detective game. Your task is to generate a complete mystery case file as a stream of single-line JSON objects.
+Each line MUST be a valid JSON object followed by a newline character.
+Generate the case data in this exact order: caseTitle, caseBrief, caseOverview, theCulprit, theAccused, motive, and then EACH character object one by one.
 - The crimes must be lighthearted and low-stakes (e.g., stolen pies, sabotaged sculptures).
 - The case must be logically solvable by finding contradictions in witness testimonies.
+- You must generate EXACTLY TWO characters.
 - IMPORTANT: The 'theAccused' and 'theCulprit' fields MUST refer to the same character. The game's premise is that the player prosecutes the correct person.
 - The culprit's 'knowledge' brief MUST contain a lie or a flimsy alibi.
-- At least one other character's 'knowledge' MUST directly contradict the culprit's story.
-- You must provide a detailed 'caseOverview' and an 'initialStatement' for every character.`;
+- The other character's 'knowledge' MUST directly contradict the culprit's story.
+- You must provide a detailed 'caseOverview' and an 'initialStatement' for every character.
+
+The output MUST be a sequence of JSON objects, each on its own line.
+Example of a single line:
+{"key": "caseTitle", "value": "The Case of the Pilfered Petunias"}
+Another example line:
+{"key": "character", "value": {"name": "Reginald P. Snodgrass", "role": "Victim", "knowledge": "I saw Beatrice near my prize-winning petunias right before they vanished. She was muttering about 'horticultural justice'.", "initialStatement": "My petunias, my pride and joy, have been purloined!"}}
+`;
 
 
 export default async (req, context) => {
     try {
-        // User may be null if they are a guest
-        const { user } = context.identityContext || {};
-
-        // 1. Generate case file from Gemini AI
-        const response = await ai.models.generateContent({
+        const geminiStream = await ai.models.generateContentStream({
             model: 'gemini-2.5-flash',
-            contents: "Generate a new detective case file.",
+            contents: "Generate a new detective case file as a stream of line-delimited JSON objects.",
             config: {
-                responseMimeType: "application/json",
-                responseSchema: caseSchema,
                 systemInstruction: systemInstruction,
-                thinkingConfig: { thinkingBudget: 0 }, // Prioritize speed to avoid timeout
             },
         });
-        const caseData = JSON.parse(response.text);
 
-        // 2. Check if user is logged in
-        if (user) {
-            // If logged in, save the new case to Supabase DB and return the record
-            const { data: newCase, error } = await supabase
-                .from('cases')
-                .insert({ user_id: user.sub, case_data: caseData })
-                .select()
-                .single();
+        // Create a TransformStream to pipe Gemini's output to the client.
+        const { readable, writable } = new TransformStream();
+        const writer = writable.getWriter();
+        const encoder = new TextEncoder();
 
-            if (error) {
-                throw new Error(`Supabase error: ${error.message}`);
+        // Asynchronously read from Gemini and write to our stream.
+        (async () => {
+            try {
+                for await (const chunk of geminiStream) {
+                    // Ensure text exists before writing to avoid sending empty chunks
+                    if (chunk.text) {
+                        writer.write(encoder.encode(chunk.text));
+                    }
+                }
+            } catch (streamError) {
+                console.error("Error during Gemini stream processing:", streamError);
+                writer.abort(streamError);
+            } finally {
+                writer.close();
             }
-            return new Response(JSON.stringify(newCase), {
-                headers: { 'Content-Type': 'application/json' },
-            });
-        } else {
-            // If user is a guest, just return the generated case data directly
-            return new Response(JSON.stringify(caseData), {
-                headers: { 'Content-Type': 'application/json' },
-            });
-        }
+        })();
+        
+        // Return our readable stream immediately to the client.
+        return new Response(readable, {
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
 
     } catch (error) {
         console.error('Error in generate-case function:', error);
         const errorMessage = error.message || "An unknown error occurred.";
-        return new Response(JSON.stringify({ error: `Failed to generate a new case: ${errorMessage}` }), { 
+        return new Response(JSON.stringify({ error: `Failed to start case generation stream: ${errorMessage}` }), { 
             status: 500,
             headers: { 'Content-Type': 'application/json' }
         });

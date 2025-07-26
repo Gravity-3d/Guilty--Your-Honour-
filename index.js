@@ -47,50 +47,134 @@ async function handleSignOut() {
 // --- Case Generation ---
 
 /**
- * Handles the click event for the "Start New Case" button for both
- * logged-in users and guests.
+ * Handles the click event for the "Start New Case" button.
+ * Switches to a streaming view and processes the case data as it arrives.
  */
 async function handleStartNewCase() {
-  const startBtn = document.getElementById('start-new-case-btn');
-  startBtn.disabled = true;
-  startBtn.textContent = 'Generating Case...';
-  subtitleEl.textContent = "The AI is writing the case file...";
+  // 1. Update UI to show generation view
+  mainMenuContent.classList.add('hidden');
+  subtitleEl.classList.add('hidden');
+  const generationContainer = document.getElementById('generation-view-container');
+  generationContainer.classList.remove('hidden');
+  
+  const titleEl = document.getElementById('generated-case-title');
+  const briefEl = document.getElementById('generated-case-brief');
+  const charactersContainer = document.getElementById('generated-characters');
+  const charactersListEl = document.getElementById('generated-characters-list');
+  const footerEl = document.getElementById('generation-footer');
+  const statusEl = document.getElementById('generation-status');
+  const proceedBtn = document.getElementById('proceed-to-courtroom-btn');
+
+  const fullCaseObject = { characters: [] };
+  let buffer = '';
 
   try {
-    const { data: userSession } = await supabase.auth.getSession();
-    const token = userSession.session?.access_token;
-    
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
-    
-    const response = await fetch('/api/generate-case', {
-      method: 'POST',
-      headers: headers
-    });
-
+    const response = await fetch('/api/generate-case');
     if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Server responded with ${response.status}`);
+      throw new Error(`Server responded with ${response.status}`);
     }
 
-    const newCase = await response.json();
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
 
-    if (currentUser && newCase.id) { // Logged-in user: case was saved, has an id
-      window.location.href = `courtroom.html?case_id=${newCase.id}`;
-    } else { // Guest user: case was not saved, store in session
-      sessionStorage.setItem('guestCase', JSON.stringify(newCase));
-      window.location.href = 'courtroom.html';
+    // 2. Read and process the stream
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // Keep the last, potentially incomplete line
+
+      for (const line of lines) {
+        if (line.trim() === '') continue;
+        try {
+          const chunk = JSON.parse(line);
+          // 3. Update UI and build case object with each chunk
+          switch (chunk.key) {
+            case 'caseTitle':
+              fullCaseObject.caseTitle = chunk.value;
+              titleEl.textContent = chunk.value;
+              break;
+            case 'caseBrief':
+              fullCaseObject.caseBrief = chunk.value;
+              briefEl.textContent = chunk.value;
+              break;
+            case 'caseOverview':
+              fullCaseObject.caseOverview = chunk.value;
+              break;
+            case 'theCulprit':
+              fullCaseObject.theCulprit = chunk.value;
+              break;
+            case 'theAccused':
+              fullCaseObject.theAccused = chunk.value;
+              break;
+            case 'motive':
+              fullCaseObject.motive = chunk.value;
+              break;
+            case 'character':
+              fullCaseObject.characters.push(chunk.value);
+              charactersContainer.classList.remove('hidden');
+              const char = chunk.value;
+              const li = document.createElement('li');
+              li.className = 'character-dossier';
+              li.innerHTML = `<h4>${char.name}</h4><p><strong>Role:</strong> ${char.role}</p><p><strong>Initial Statement:</strong> "${char.initialStatement}"</p>`;
+              charactersListEl.appendChild(li);
+              break;
+          }
+        } catch (e) {
+          console.warn('Could not parse JSON line:', line, e);
+        }
+      }
+    }
+
+    // 4. Finalize after stream has finished
+    footerEl.classList.remove('hidden');
+
+    if (currentUser) {
+      statusEl.textContent = 'Case generation complete. Saving to your case files...';
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("User session not found. Cannot save case.");
+      
+      const saveResponse = await fetch('/api/ai-handler', {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+              action: 'saveCase',
+              caseData: fullCaseObject
+          })
+      });
+
+      if (!saveResponse.ok) {
+          const err = await saveResponse.json();
+          throw new Error(`Failed to save the case file: ${err.error}`);
+      }
+
+      const savedCase = await saveResponse.json();
+      statusEl.textContent = 'Case saved successfully!';
+      proceedBtn.classList.remove('hidden');
+      proceedBtn.onclick = () => window.location.href = `courtroom.html?case_id=${savedCase.data.id}`;
+
+    } else {
+      statusEl.textContent = 'Case generation complete!';
+      sessionStorage.setItem('guestCase', JSON.stringify(fullCaseObject));
+      proceedBtn.classList.remove('hidden');
+      proceedBtn.onclick = () => window.location.href = 'courtroom.html';
     }
 
   } catch (error) {
-    console.error("Error starting new case:", error);
-    subtitleEl.textContent = `Error: ${error.message}`;
-    startBtn.disabled = false;
-    startBtn.textContent = 'Start New Case';
+    console.error("Error during case generation stream:", error);
+    titleEl.textContent = 'Error Generating Case';
+    briefEl.textContent = `A problem occurred: ${error.message}. Please try refreshing the page.`;
+    footerEl.classList.add('hidden');
   }
 }
+
 
 // --- Event Listeners & Initialization ---
 

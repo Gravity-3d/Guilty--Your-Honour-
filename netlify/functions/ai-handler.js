@@ -1,7 +1,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { createClient } from '@supabase/supabase-js';
 
-// Initialize AI client from environment variables
+// Initialize AI and Supabase clients from environment variables
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 // --- AI Persona Functions ---
 // These functions construct the system instructions and configurations for the AI
@@ -109,14 +111,33 @@ const getTranscriptSummaryConfig = (payload) => {
 export default async (req, context) => {
   let payload;
   try {
-    // This endpoint is public to allow guest play.
-    // The AI actions themselves are stateless and do not modify user-specific data directly.
-
     payload = await req.json();
     const { action } = payload;
 
     let aiConfig;
     switch (action) {
+      case 'saveCase': {
+        const { user } = context.identityContext || {};
+        if (!user) {
+            return new Response(JSON.stringify({ error: 'Authentication required to save a case.' }), { 
+                status: 401, headers: { 'Content-Type': 'application/json' }
+            });
+        }
+        const { caseData } = payload;
+        if (!caseData) throw new Error('No case data provided for saving.');
+
+        const { data: newCase, error } = await supabase
+            .from('cases')
+            .insert({ user_id: user.sub, case_data: caseData })
+            .select()
+            .single();
+
+        if (error) throw new Error(`Supabase error: ${error.message}`);
+        
+        return new Response(JSON.stringify({ data: newCase }), {
+            headers: { 'Content-Type': 'application/json' },
+        });
+      }
       case 'getWitnessResponse':
         aiConfig = getWitnessConfig(payload);
         break;

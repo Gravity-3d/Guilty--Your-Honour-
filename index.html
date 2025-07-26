@@ -32,6 +32,22 @@
           </div>
           <p class="auth-prompt">Play as a guest, or sign in to save your cases.</p>
         </div>
+        
+        <div id="generation-view-container" class="hidden">
+          <h2 id="generated-case-title" class="case-title">Generating Case Title...</h2>
+          <div id="generated-case-briefing">
+              <p id="generated-case-brief">The AI is creating the case brief...</p>
+          </div>
+          <div id="generated-characters" class="hidden">
+              <h3 class="panel-title" style="text-align: left; border: none; margin-top: 2rem;">Case Dossier</h3>
+              <ul id="generated-characters-list"></ul>
+          </div>
+          <div id="generation-footer" class="hidden" style="margin-top: 2rem;">
+              <p id="generation-status">Case generation complete. Saving progress...</p>
+              <button id="proceed-to-courtroom-btn" class="menu-btn hidden">Proceed to Courtroom</button>
+          </div>
+        </div>
+
       </main>
     </div>
 
