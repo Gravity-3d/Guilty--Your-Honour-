@@ -78,6 +78,10 @@ export default async (req, context) => {
 
     } catch (error) {
         console.error('Error in generate-case function:', error);
-        return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+        const errorMessage = error.message || "An unknown error occurred.";
+        return new Response(JSON.stringify({ error: `Failed to generate a new case: ${errorMessage}` }), { 
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
 };

@@ -1,16 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
 
-/**
- * Case Closed: The AI Detective
- * Main menu, authentication state, and case generation logic.
- */
 
-// --- Supabase Client ---
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+import { getSupabase } from './supabase-client.js';
 
-// --- State ---
+let supabase;
 let currentUser = null;
 
 // --- DOM Elements ---
@@ -48,8 +40,8 @@ function updateUIForAuthState(user) {
 
 async function handleSignOut() {
   await supabase.auth.signOut();
-  // onAuthStateChange listener will update the UI, no redirect needed
-  window.location.reload(); // Force a refresh to ensure state is clean
+  // onAuthStateChange listener will update the UI, but a reload ensures a clean state.
+  window.location.reload();
 }
 
 // --- Case Generation ---
@@ -102,19 +94,23 @@ async function handleStartNewCase() {
 
 // --- Event Listeners & Initialization ---
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    subtitleEl.textContent = "Application is not configured. Missing Supabase details.";
-    mainMenuContent.innerHTML = ''; // Clear buttons if not configured
-    return;
-  }
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        supabase = await getSupabase();
+    } catch (error) {
+        const errorMessage = error.message || "An unknown error occurred during initialization.";
+        subtitleEl.textContent = `Initialization Error`;
+        mainMenuContent.innerHTML = `<p class="error-message">Could not start the application: ${errorMessage}. Please try refreshing the page.</p>`;
+        console.error("Initialization failed:", error);
+        return;
+    }
 
-  // Add listener to the static "Start" button
-  document.getElementById('start-new-case-btn').addEventListener('click', handleStartNewCase);
+    // Add listener to the static "Start" button
+    document.getElementById('start-new-case-btn').addEventListener('click', handleStartNewCase);
 
-  // Supabase Auth State Listener
-  supabase.auth.onAuthStateChange((_event, session) => {
-    currentUser = session?.user ?? null;
-    updateUIForAuthState(currentUser);
-  });
+    // Supabase Auth State Listener
+    supabase.auth.onAuthStateChange((_event, session) => {
+        currentUser = session?.user ?? null;
+        updateUIForAuthState(currentUser);
+    });
 });

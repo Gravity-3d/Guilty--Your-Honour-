@@ -107,11 +107,12 @@ const getTranscriptSummaryConfig = (payload) => {
 
 // Main handler function
 export default async (req, context) => {
+  let payload;
   try {
     // This endpoint is public to allow guest play.
     // The AI actions themselves are stateless and do not modify user-specific data directly.
 
-    const payload = await req.json();
+    payload = await req.json();
     const { action } = payload;
 
     let aiConfig;
@@ -148,7 +149,12 @@ export default async (req, context) => {
     });
 
   } catch (error) {
-    console.error(`Error in ai-handler for action:`, error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    const action = payload ? payload.action : 'unknown';
+    console.error(`Error in ai-handler for action "${action}":`, error);
+    const errorMessage = error.message || "An unknown error occurred.";
+    return new Response(JSON.stringify({ error: `AI handler failed for action "${action}": ${errorMessage}` }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 };
