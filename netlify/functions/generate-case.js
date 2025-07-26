@@ -17,13 +17,13 @@ const caseSchema = {
       motive: { type: Type.STRING, description: "A plausible, yet slightly silly, motive for the culprit." },
       characters: {
         type: Type.ARRAY,
-        description: "A list of 3-4 characters involved in the case.",
+        description: "A list of exactly 3 characters involved in the case.",
         items: {
           type: Type.OBJECT,
           properties: {
             name: { type: Type.STRING, description: "The character's full name." },
             role: { type: Type.STRING, description: "The character's role or relationship to the case." },
-            knowledge: { type: Type.STRING, description: "A secret brief of what this character knows. This is the most important part. The information for all characters combined must contain clues and at least one key contradiction that allows the player to solve the case. The culprit's knowledge should contain a lie or alibi that a good defense attorney could plausibly defend, but that a good prosecutor could see through. At least one other character's knowledge must contradict that lie/alibi." },
+            knowledge: { type: Type.STRING, description: "Secret brief of what this character knows. The culprit's knowledge MUST contain a specific lie. One other character's knowledge MUST contradict that lie to make the case solvable." },
             initialStatement: { type: Type.STRING, description: "A brief, one-sentence initial statement this character gave to investigators, which will be presented at the start of the trial."}
           },
           required: ["name", "role", "knowledge", "initialStatement"]
@@ -55,6 +55,7 @@ export default async (req, context) => {
                 responseMimeType: "application/json",
                 responseSchema: caseSchema,
                 systemInstruction: systemInstruction,
+                thinkingConfig: { thinkingBudget: 0 }, // Prioritize speed to avoid timeout
             },
         });
         const caseData = JSON.parse(response.text);
