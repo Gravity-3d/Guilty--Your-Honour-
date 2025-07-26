@@ -75,6 +75,14 @@ You must decide if the objection is valid. Respond with only one word: "Sustaine
 
 const getFinalVerdictConfig = (payload) => {
     const { summary, accusationReason, currentCase } = payload;
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            verdict: { type: Type.STRING, enum: ["Guilty", "Innocent"] },
+            reasoning: { type: Type.STRING }
+        },
+        required: ["verdict", "reasoning"]
+    };
     return {
         contents: `Based on the summary and argument, is ${currentCase.theAccused} guilty?`,
         config: {
@@ -91,6 +99,7 @@ Your response must be a JSON object with two fields: "verdict" and "reasoning".
 - "verdict": Your verdict, either "Guilty" or "Innocent".
 - "reasoning": A brief, 1-2 sentence explanation for your verdict.`,
             responseMimeType: 'application/json',
+            responseSchema: schema
         },
     };
 };
@@ -116,28 +125,7 @@ export default async (req, context) => {
 
     let aiConfig;
     switch (action) {
-      case 'saveCase': {
-        const { user } = context.identityContext || {};
-        if (!user) {
-            return new Response(JSON.stringify({ error: 'Authentication required to save a case.' }), { 
-                status: 401, headers: { 'Content-Type': 'application/json' }
-            });
-        }
-        const { caseData } = payload;
-        if (!caseData) throw new Error('No case data provided for saving.');
-
-        const { data: newCase, error } = await supabase
-            .from('cases')
-            .insert({ user_id: user.sub, case_data: caseData })
-            .select()
-            .single();
-
-        if (error) throw new Error(`Supabase error: ${error.message}`);
-        
-        return new Response(JSON.stringify({ data: newCase }), {
-            headers: { 'Content-Type': 'application/json' },
-        });
-      }
+      // The 'saveCase' action is now obsolete, handled by the async flow.
       case 'getWitnessResponse':
         aiConfig = getWitnessConfig(payload);
         break;
@@ -154,7 +142,7 @@ export default async (req, context) => {
         aiConfig = getTranscriptSummaryConfig(payload);
         break;
       default:
-        throw new Error('Invalid AI action specified.');
+        throw new Error(`Invalid AI action specified: ${action}`);
     }
 
     const response = await ai.models.generateContent({
