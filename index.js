@@ -68,7 +68,7 @@ function pollForCaseStatus(caseId, userType) {
 
     pollingInterval = setInterval(async () => {
         try {
-            const response = await fetch(`/.netlify/functions/poll-case?caseId=${caseId}&userType=${userType}`);
+            const response = await fetch(`/api/poll-case?caseId=${caseId}&userType=${userType}`);
             if (!response.ok) {
                  throw new Error(`Server poll failed with status ${response.status}`);
             }
@@ -129,7 +129,7 @@ async function handleStartNewCase() {
         }
 
         // 2. Initiate the case generation, passing auth token if available
-        const initResponse = await fetch('/.netlify/functions/initiate-case', { 
+        const initResponse = await fetch('/api/initiate-case', { 
             method: 'POST',
             headers: headers
         });
@@ -142,7 +142,7 @@ async function handleStartNewCase() {
         briefEl.textContent = 'The AI is on the job, crafting a new mystery. This may take a moment.';
 
         // 3. Trigger the background processing (fire-and-forget)
-        fetch('/.netlify/functions/process-case', {
+        fetch('/api/process-case', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ caseId, userType })
