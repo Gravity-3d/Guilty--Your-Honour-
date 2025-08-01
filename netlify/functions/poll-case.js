@@ -1,7 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase admin client
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 export default async (req, context) => {
@@ -17,26 +16,24 @@ export default async (req, context) => {
     try {
         let caseResult;
         if (userType === 'auth') {
-            if (!user) return new Response(JSON.stringify({ error: "User not authenticated for this case type." }), { status: 401 });
-            
             const { data, error } = await supabase
                 .from('cases')
                 .select('status, case_data')
                 .eq('id', caseId)
-                .eq('user_id', user.sub) // RLS check for ownership
+                .eq('user_id', user.sub)
                 .single();
             
-            if (error) throw new Error(`Supabase auth poll error: ${error.message}`);
+            if (error) throw error;
             caseResult = data;
 
-        } else { // guest
+        } else {
             const { data, error } = await supabase
                 .from('guest_cases')
                 .select('status, case_data')
                 .eq('id', caseId)
                 .single();
 
-            if (error) throw new Error(`Supabase guest poll error: ${error.message}`);
+            if (error) throw error;
             caseResult = data;
         }
 
@@ -50,7 +47,6 @@ export default async (req, context) => {
         });
 
     } catch (error) {
-        console.error(`Error polling case ${caseId}:`, error);
         return new Response(JSON.stringify({ error: error.message, status: 'FAILED' }), { 
             status: 500,
             headers: { 'Content-Type': 'application/json' }

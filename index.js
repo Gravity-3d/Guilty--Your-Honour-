@@ -5,7 +5,6 @@ let supabase;
 let currentUser = null;
 let pollingInterval = null;
 
-// --- DOM Elements ---
 const authNav = document.getElementById('auth-nav');
 const mainMenuContent = document.getElementById('main-menu-content');
 const subtitleEl = document.querySelector('.subtitle');
@@ -19,9 +18,6 @@ const statusEl = document.getElementById('generation-status');
 const proceedBtn = document.getElementById('proceed-to-courtroom-btn');
 
 
-/**
- * Updates the header navigation based on user's auth state.
- */
 function updateUIForAuthState(user) {
   if (user) {
     authNav.innerHTML = `
@@ -44,9 +40,6 @@ async function handleSignOut() {
   window.location.reload();
 }
 
-/**
- * Renders the final case data to the UI.
- */
 function displayCaseData(caseData) {
     titleEl.textContent = caseData.caseTitle;
     briefEl.textContent = caseData.caseBrief;
@@ -76,7 +69,6 @@ function pollForCaseStatus(caseId, userType) {
 
             switch (data.status) {
                 case 'PENDING':
-                    // Still waiting, do nothing.
                     break;
                 case 'READY':
                     clearInterval(pollingInterval);
@@ -88,9 +80,8 @@ function pollForCaseStatus(caseId, userType) {
                         statusEl.textContent = 'Case file ready. This is a guest session and will not be saved.';
                         sessionStorage.setItem('guestCase', JSON.stringify(data.case_data));
                         proceedBtn.onclick = () => window.location.href = 'courtroom.html';
-                    } else { // auth user
+                    } else {
                         statusEl.textContent = 'Case file ready. Your progress is saved automatically.';
-                        // No need to save to session, courtroom will fetch from DB.
                         proceedBtn.onclick = () => window.location.href = `courtroom.html?case_id=${caseId}`;
                     }
                     break;
@@ -99,24 +90,17 @@ function pollForCaseStatus(caseId, userType) {
                     titleEl.textContent = 'Error Generating Case';
                     briefEl.textContent = 'There was a problem communicating with the AI. Please try again.';
                     footerEl.classList.add('hidden');
-                    // Maybe add a 'try again' button that reloads the page.
                     break;
             }
         } catch (error) {
-            console.error("Error during polling:", error);
             clearInterval(pollingInterval);
             titleEl.textContent = 'Connection Error';
             briefEl.textContent = `Could not get case status: ${error.message}. Please check your connection and refresh.`;
         }
-    }, 3000); // Poll every 3 seconds
+    }, 3000);
 }
 
-/**
- * Handles the click event for the "Start New Case" button.
- * Implements an asynchronous polling flow to avoid timeouts.
- */
 async function handleStartNewCase() {
-    // 1. Update UI to show generation view
     mainMenuContent.classList.add('hidden');
     subtitleEl.classList.add('hidden');
     generationContainer.classList.remove('hidden');
@@ -128,7 +112,6 @@ async function handleStartNewCase() {
             headers['Authorization'] = `Bearer ${session.access_token}`;
         }
 
-        // 2. Initiate the case generation, passing auth token if available
         const initResponse = await fetch('/api/initiate-case', { 
             method: 'POST',
             headers: headers
@@ -137,22 +120,18 @@ async function handleStartNewCase() {
         if (!initResponse.ok) throw new Error(`Failed to initiate case: ${await initResponse.text()}`);
         const { caseId, userType } = await initResponse.json();
         
-        // UI update for processing
         titleEl.textContent = 'Generating Case Dossier...';
         briefEl.textContent = 'The AI is on the job, crafting a new mystery. This may take a moment.';
 
-        // 3. Trigger the background processing (fire-and-forget)
         fetch('/api/process-case', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ caseId, userType })
         });
         
-        // 4. Start polling for the result
         pollForCaseStatus(caseId, userType);
 
     } catch (error) {
-        console.error("Error starting new case:", error);
         titleEl.textContent = 'Error Starting Case';
         briefEl.textContent = `A problem occurred: ${error.message}. Please try refreshing the page.`;
     }
@@ -166,7 +145,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const errorMessage = error.message || "An unknown error occurred during initialization.";
         subtitleEl.textContent = `Initialization Error`;
         mainMenuContent.innerHTML = `<p class="error-message">Could not start the application: ${errorMessage}. Please try refreshing the page.</p>`;
-        console.error("Initialization failed:", error);
         return;
     }
 
@@ -177,7 +155,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateUIForAuthState(currentUser);
     });
 
-    // Cleanup polling on page leave
     window.addEventListener('beforeunload', () => {
         if (pollingInterval) clearInterval(pollingInterval);
     });

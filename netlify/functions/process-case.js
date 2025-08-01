@@ -2,7 +2,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize clients
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -20,18 +19,16 @@ const systemInstruction = `You are a creative writer for a noir detective game. 
 const caseSchema = {
     type: Type.OBJECT,
     properties: {
-        caseTitle: { type: Type.STRING, description: "A catchy, noir-style title for the case." },
-        caseBrief: { type: Type.STRING, description: "A one-sentence summary of the crime to be displayed to the player." },
-        theCulprit: { type: Type.STRING, description: "The name of the character who is guilty." },
-        theAccused: { type: Type.STRING, description: "The name of the character being accused. Must be the same as theCulprit." },
+        caseTitle: { type: Type.STRING },
+        caseBrief: { type: Type.STRING },
+        theCulprit: { type: Type.STRING },
+        theAccused: { type: Type.STRING },
         publicDossier: {
             type: Type.OBJECT,
-            description: "Information available to all parties at the start of the game.",
             properties: {
-                policeReport: { type: Type.STRING, description: "A 2-3 sentence paragraph detailing the crime scene and situation, written like an official police report." },
+                policeReport: { type: Type.STRING },
                 initialStatements: {
                     type: Type.ARRAY,
-                    description: "An array containing the initial, one-sentence alibi or statement from each character.",
                     items: {
                         type: Type.OBJECT,
                         properties: {
@@ -46,13 +43,12 @@ const caseSchema = {
         },
         characters: {
             type: Type.ARRAY,
-            description: "An array of 4 to 5 character objects.",
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    name: { type: Type.STRING, description: "The character's full name. Must match a name in initialStatements." },
-                    role: { type: Type.STRING, description: "The character's role in the story (e.g., 'Victim's Rival', 'Nosy Neighbor')." },
-                    knowledge: { type: Type.STRING, description: "A secret, detailed brief of what this character knows, to be used by the AI playing this role. This is HIDDEN information." },
+                    name: { type: Type.STRING },
+                    role: { type: Type.STRING },
+                    knowledge: { type: Type.STRING },
                 },
                 required: ["name", "role", "knowledge"]
             }
@@ -61,8 +57,6 @@ const caseSchema = {
     required: ["caseTitle", "caseBrief", "theCulprit", "theAccused", "publicDossier", "characters"]
 };
 
-
-// Helper to update case status in the database
 const updateCaseStatus = async (table, caseId, status, caseData = null) => {
     const updatePayload = { status };
     if (caseData) {
@@ -79,12 +73,9 @@ const updateCaseStatus = async (table, caseId, status, caseData = null) => {
 };
 
 export default async (req) => {
-    // This is a fire-and-forget function. The client does not wait for the response.
-    // We wrap the main logic in a try/catch to ensure we can mark cases as FAILED.
     const { caseId, userType } = await req.json();
     if (!caseId || !userType) {
-        // Acknowledge the request even if it's bad, to prevent client-side errors.
-        return new Response(JSON.stringify({ error: "Missing caseId or userType" }), { status: 400 });
+        return new Response(null, { status: 400 });
     }
 
     const table = userType === 'auth' ? 'cases' : 'guest_cases';
@@ -97,7 +88,6 @@ export default async (req) => {
                 systemInstruction: systemInstruction,
                 responseMimeType: "application/json",
                 responseSchema: caseSchema,
-                // Give the creator AI a generous thinking budget for high-quality cases
                 maxOutputTokens: 8192,
                 thinkingConfig: { thinkingBudget: 2048 },
             },
@@ -106,18 +96,14 @@ export default async (req) => {
         const caseData = JSON.parse(response.text);
         
         if (!caseData.caseTitle || !caseData.characters || caseData.characters.length < 4) {
-             throw new Error("AI failed to generate a valid case structure with at least four characters.");
+             throw new Error("AI failed to generate a valid case structure.");
         }
 
-        // Update the case record with the data and set status to 'READY'
         await updateCaseStatus(table, caseId, 'READY', caseData);
 
     } catch (error) {
-        console.error(`Error processing case ${caseId}:`, error);
-        // If anything fails, update the status to 'FAILED'
         await updateCaseStatus(table, caseId, 'FAILED');
     }
 
-    // Return 200 to acknowledge receipt of the processing request.
-    return new Response(JSON.stringify({ message: "Processing acknowledged." }), { status: 200 });
+    return new Response(null, { status: 202 });
 };

@@ -1,35 +1,14 @@
 
-
 import { getSupabase } from './supabase-client.js';
 
-/**
- * Case Closed: The AI Detective
- * Courtroom scene logic for turn-based debate, supporting both
- * authenticated users (with DB persistence) and guests (with session storage).
- */
-
-// --- Supabase Client ---
-let supabase; // Will be initialized in loadCaseAndSetup
-
-// --- Constants ---
 const MAX_QUESTIONS_PER_TURN = 10;
 const MAX_ACCUSATIONS = 3;
 
-// --- State ---
-let caseId = null; // Will be set for logged-in users
-let currentCase = null; // Will hold just case_data
-let currentTurnNumber = 1;
-let currentWitness = null;
-let isAiResponding = false;
-let isGameOver = false;
-let currentTurn = 'PROSECUTOR'; // PROSECUTOR or DEFENSE
-let questionsThisTurn = 0;
-let debateTranscript = [];
-let lastQuestion = { speaker: null, text: null };
-let prosecutorAccusationAttempts = 0;
-let reasoningModalContext = { action: null, target: null, callback: null };
+let supabase, caseId = null, currentCase = null, currentTurnNumber = 1, currentWitness = null,
+    isAiResponding = false, isGameOver = false, currentTurn = 'PROSECUTOR', questionsThisTurn = 0,
+    debateTranscript = [], lastQuestion = { speaker: null, text: null },
+    prosecutorAccusationAttempts = 0, reasoningModalContext = {};
 
-// --- DOM Elements ---
 const accusedNameEl = document.getElementById('accused-name');
 const defenseAttorneyStatusEl = document.getElementById('defense-attorney-status');
 const prosecutorStrikesEl = document.getElementById('prosecutor-strikes');
@@ -62,16 +41,6 @@ const reasoningForm = document.getElementById('reasoning-form');
 const reasoningTextarea = document.getElementById('reasoning-textarea');
 const cancelReasoningBtn = document.getElementById('cancel-reasoning-btn');
 
-
-// --- Backend AI Handler ---
-
-/**
- * Generic function to call the backend AI handler. Works for both
- * authenticated and guest users.
- * @param {string} action - The type of AI action to perform.
- * @param {object} payload - The data needed for the AI to perform the action.
- * @returns {Promise<any>} The data from the AI's response.
- */
 async function callAiHandler(action, payload) {
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -94,15 +63,12 @@ async function callAiHandler(action, payload) {
     const result = await response.json();
     return result.data;
   } catch (error) {
-    console.error(`Error calling AI Handler for action "${action}":`, error);
     addSystemMessage(`A critical error occurred with the AI. ${error.message}`);
     isAiResponding = false;
     updateUI();
     return null;
   }
 }
-
-// --- Game Initialization ---
 
 async function loadCaseAndSetup() {
   try {
@@ -118,7 +84,6 @@ async function loadCaseAndSetup() {
   caseId = params.get('case_id');
 
   if (caseId) {
-    // --- Logged-in User Flow: Load from Supabase ---
     const { data: caseResult, error: caseError } = await supabase
       .from('cases')
       .select('*, transcripts(*)')
@@ -139,7 +104,6 @@ async function loadCaseAndSetup() {
     
     setupCourtroomUI();
     
-    // Restore state from loaded data
     debateTranscript.forEach(entry => renderDialogueEntry(entry, false));
     if (debateTranscript.length === 0) {
       displayInitialBriefing();
@@ -148,12 +112,11 @@ async function loadCaseAndSetup() {
       endGame(caseResult.player_win, "This case has already been closed.");
     }
   } else {
-    // --- Guest User Flow: Load from Session Storage ---
     const guestCaseJSON = sessionStorage.getItem('guestCase');
     if (guestCaseJSON) {
         currentCase = JSON.parse(guestCaseJSON);
         isGameOver = false;
-        debateTranscript = []; // Guest always starts fresh
+        debateTranscript = [];
         setupCourtroomUI();
         displayInitialBriefing();
     } else {
@@ -166,9 +129,6 @@ async function loadCaseAndSetup() {
   updateUI();
 }
 
-/**
- * Populates the UI with the initial case data.
- */
 function setupCourtroomUI() {
     accusedNameEl.textContent = currentCase.theAccused;
     prosecutorStrikesEl.textContent = MAX_ACCUSATIONS - prosecutorAccusationAttempts;
@@ -186,8 +146,6 @@ function displayInitialBriefing() {
     addDialogueEntry({ speaker: 'System', text: briefingText, type: 'briefing' });
     addSystemMessage('The Prosecutor may call the first witness.');
 }
-
-// --- Dialogue and Transcript Management ---
 
 function renderDialogueEntry({ speaker, text, type }, saveToDb = true) {
   const entryDiv = document.createElement('div');
@@ -216,7 +174,6 @@ function renderDialogueEntry({ speaker, text, type }, saveToDb = true) {
   dialogueBox.appendChild(entryDiv);
   dialogueBox.scrollTop = dialogueBox.scrollHeight;
 
-  // Save the entry to the database ONLY if logged in and not a re-render
   if (saveToDb && type !== 'briefing') {
     saveTranscriptEntry({ speaker, text, type });
   }
@@ -232,7 +189,7 @@ function addSystemMessage(text) {
 }
 
 async function saveTranscriptEntry({ speaker, text, type }) {
-    if (!caseId) return; // Do not save for guests
+    if (!caseId) return;
     await supabase.from('transcripts').insert({
         case_id: caseId,
         speaker,
@@ -241,8 +198,6 @@ async function saveTranscriptEntry({ speaker, text, type }) {
         turn_number: currentTurnNumber
     });
 }
-
-// --- Core Game Logic ---
 
 async function getWitnessResponse(question) {
   const response = await callAiHandler('getWitnessResponse', { currentWitness, question });
@@ -298,16 +253,16 @@ async function runDefenseTurn() {
 
         if (ruling.toLowerCase().includes('sustained')) {
             addSystemMessage("The Judge sustains the objection. The defense will proceed.");
-            lastQuestion = { speaker: null, text: null }; // Prevent re-objecting
-            setTimeout(runDefenseTurn, 1500); // Let the defense make another move
-        } else { // Overruled
+            lastQuestion = { speaker: null, text: null };
+            setTimeout(runDefenseTurn, 1500);
+        } else {
             addSystemMessage("The Judge overrules the objection. The defense forfeits its turn.");
             isAiResponding = false;
             setTimeout(nextTurn, 1500);
         }
 
     } else if (defenseMove.action === 'ask' && defenseMove.question) {
-        isAiResponding = false; // Temporarily allow UI update
+        isAiResponding = false;
         const question = defenseMove.question;
         addDialogueEntry({ speaker: 'Defense', text: question, type: 'defense' });
         lastQuestion = { speaker: 'DEFENSE', text: question };
@@ -327,7 +282,7 @@ async function runDefenseTurn() {
         } else {
             setTimeout(runDefenseTurn, 1000);
         }
-    } else { // Pass
+    } else {
         isAiResponding = false;
         addDialogueEntry({ speaker: 'Defense', text: "I pass the turn.", type: 'defense' });
         setTimeout(nextTurn, 1500);
@@ -349,15 +304,11 @@ async function endGame(didWin, verdictMessage = '') {
         addSystemMessage(verdictMessage || `You failed to prove your case. The culprit, ${currentCase.theCulprit}, gets away.`);
     }
 
-    // Update case in Supabase only if it's a saved game
     if (caseId) {
         await supabase.from('cases').update({ is_complete: true, player_win: didWin }).eq('id', caseId);
     }
-    // For guests, game ends here. Closing the tab will clear the session.
     updateUI();
 }
-
-// --- UI Management & Event Handlers ---
 
 function updateUI() {
     const questionsLeft = MAX_QUESTIONS_PER_TURN - questionsThisTurn;
@@ -429,7 +380,6 @@ async function handleFinalAccusation(accusedName, reason) {
     isAiResponding = true;
     updateUI();
 
-    // Call the new single, combined AI handler action
     const result = await callAiHandler('getFinalVerdictWithSummary', {
         debateTranscript,
         accusationReason: reason,
@@ -437,7 +387,6 @@ async function handleFinalAccusation(accusedName, reason) {
     });
     
     if (!result) {
-        // Error is handled inside callAiHandler, but we should stop here.
         isAiResponding = false;
         updateUI();
         return;
@@ -446,7 +395,7 @@ async function handleFinalAccusation(accusedName, reason) {
     const { summary, verdict, reasoning: judgeReasoning } = result;
 
     addSystemMessage(`--- Case Summary ---\n${summary}`);
-    await new Promise(resolve => setTimeout(resolve, 500)); // small delay for dramatic effect
+    await new Promise(resolve => setTimeout(resolve, 500));
     
     addDialogueEntry({ speaker: 'Judge', text: `On the charge against ${accusedName}, I find them... ${verdict}! ${judgeReasoning}`, type: 'judge' });
 
