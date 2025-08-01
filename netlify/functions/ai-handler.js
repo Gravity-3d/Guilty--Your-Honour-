@@ -123,9 +123,39 @@ export default async (req, context) => {
     payload = await req.json();
     const { action } = payload;
 
+    // Special handling for combined action to prevent timeouts
+    if (action === 'getFinalVerdictWithSummary') {
+        // Step 1: Generate Transcript Summary
+        const summaryConfig = getTranscriptSummaryConfig(payload);
+        const summaryResponse = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            ...summaryConfig
+        });
+        const summary = summaryResponse.text;
+
+        // Step 2: Generate Final Verdict using the summary
+        const verdictPayload = { ...payload, summary };
+        const verdictConfig = getFinalVerdictConfig(verdictPayload);
+        const verdictResponse = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            ...verdictConfig
+        });
+        
+        const verdictData = JSON.parse(verdictResponse.text);
+
+        // Return the summary along with the verdict data
+        const combinedData = {
+            summary,
+            ...verdictData
+        };
+
+        return new Response(JSON.stringify({ data: combinedData }), {
+            headers: { 'Content-Type': 'application/json' },
+        });
+    }
+
     let aiConfig;
     switch (action) {
-      // The 'saveCase' action is now obsolete, handled by the async flow.
       case 'getWitnessResponse':
         aiConfig = getWitnessConfig(payload);
         break;
@@ -135,14 +165,8 @@ export default async (req, context) => {
       case 'getJudgeRuling':
         aiConfig = getJudgeRulingConfig(payload);
         break;
-      case 'getFinalVerdict':
-        aiConfig = getFinalVerdictConfig(payload);
-        break;
-      case 'getTranscriptSummary':
-        aiConfig = getTranscriptSummaryConfig(payload);
-        break;
       default:
-        throw new Error(`Invalid AI action specified: ${action}`);
+        throw new Error(`Invalid or unsupported AI action specified: ${action}`);
     }
 
     const response = await ai.models.generateContent({

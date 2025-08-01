@@ -1,12 +1,4 @@
-# This is the configuration for Netlify.
-# Per your request, this content is placed in netlify.txt.
-# For Netlify to process these rules, this file typically needs to be named "netlify.toml".
-
 [build]
-  publish = "/"
+  command = "npm install"
+  publish = "."
   functions = "netlify/functions"
-
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
-  status = 200

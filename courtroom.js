@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { getSupabase } from './supabase-client.js';
 
 /**
  * Case Closed: The AI Detective
@@ -7,9 +7,7 @@ import { createClient } from '@supabase/supabase-js';
  */
 
 // --- Supabase Client ---
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let supabase; // Will be initialized in loadCaseAndSetup
 
 // --- Constants ---
 const MAX_QUESTIONS_PER_TURN = 10;
@@ -81,7 +79,7 @@ async function callAiHandler(action, payload) {
       headers['Authorization'] = `Bearer ${session.access_token}`;
     }
 
-    const response = await fetch('/api/ai-handler', {
+    const response = await fetch('/.netlify/functions/ai-handler', {
       method: 'POST',
       headers: headers,
       body: JSON.stringify({ action, ...payload }),
@@ -105,6 +103,15 @@ async function callAiHandler(action, payload) {
 // --- Game Initialization ---
 
 async function loadCaseAndSetup() {
+  try {
+    supabase = await getSupabase();
+  } catch (error) {
+    addSystemMessage(`Application is not configured correctly: ${error.message}`);
+    isGameOver = true;
+    updateUI();
+    return;
+  }
+  
   const params = new URLSearchParams(window.location.search);
   caseId = params.get('case_id');
 
@@ -233,7 +240,6 @@ async function saveTranscriptEntry({ speaker, text, type }) {
 }
 
 // --- Core Game Logic ---
-// Unchanged - these call the AI handler which now supports guests
 
 async function getWitnessResponse(question) {
   const response = await callAiHandler('getWitnessResponse', { currentWitness, question });
@@ -245,21 +251,6 @@ async function getDefenseAction() {
       currentCase, currentWitness, questionsThisTurn, lastQuestion, debateTranscript
   });
   return response || { action: 'pass' };
-}
-
-async function getJudgeRuling(question, reason) {
-  const response = await callAiHandler('getJudgeRuling', { question, reason });
-  return (response || "Overruled").trim().replace(/[^a-zA-Z]/g, '');
-}
-
-async function getFinalVerdict(summary, accusationReason) {
-    const response = await callAiHandler('getFinalVerdict', { summary, accusationReason, currentCase });
-    return response || { verdict: "Innocent", reasoning: "Could not contact the Judge."};
-}
-
-async function getTranscriptSummary() {
-    const response = await callAiHandler('getTranscriptSummary', { debateTranscript });
-    return response || "The transcript is unavailable.";
 }
 
 function nextTurn() {
@@ -415,14 +406,29 @@ async function handleFinalAccusation(accusedName, reason) {
     updateUI();
     addSystemMessage(`You point your finger decisively and accuse ${accusedName} of the crime!`);
     addDialogueEntry({ speaker: 'Prosecutor', text: reason, type: 'prosecutor' });
-    addSystemMessage('The case goes to the judge...');
+    addSystemMessage('The case goes to the judge for a final ruling...');
     isAiResponding = true;
     updateUI();
 
-    const summary = await getTranscriptSummary();
-    addSystemMessage(`--- Case Summary ---\n${summary}`);
+    // Call the new single, combined AI handler action
+    const result = await callAiHandler('getFinalVerdictWithSummary', {
+        debateTranscript,
+        accusationReason: reason,
+        currentCase
+    });
     
-    const { verdict, reasoning: judgeReasoning } = await getFinalVerdict(summary, reason);
+    if (!result) {
+        // Error is handled inside callAiHandler, but we should stop here.
+        isAiResponding = false;
+        updateUI();
+        return;
+    }
+
+    const { summary, verdict, reasoning: judgeReasoning } = result;
+
+    addSystemMessage(`--- Case Summary ---\n${summary}`);
+    await new Promise(resolve => setTimeout(resolve, 500)); // small delay for dramatic effect
+    
     addDialogueEntry({ speaker: 'Judge', text: `On the charge against ${accusedName}, I find them... ${verdict}! ${judgeReasoning}`, type: 'judge' });
 
     const correctAccusation = accusedName === currentCase.theCulprit;
@@ -518,12 +524,6 @@ function setupEventListeners() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      addSystemMessage("Application is not configured correctly.");
-      isGameOver = true;
-      updateUI();
-      return;
-  }
   loadCaseAndSetup();
   setupEventListeners();
 });
