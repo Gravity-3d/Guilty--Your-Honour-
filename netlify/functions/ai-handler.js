@@ -1,3 +1,5 @@
+
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from '@supabase/supabase-js';
 
@@ -32,13 +34,14 @@ const getDefenseActionConfig = (payload) => {
   const { currentCase, currentWitness, questionsThisTurn, lastQuestion, debateTranscript } = payload;
   const canObject = lastQuestion.speaker === 'PROSECUTOR';
   const transcriptText = debateTranscript.map(d => `${d.speaker}: ${d.text}`).join('\n');
+  const publicInfo = JSON.stringify(currentCase.publicDossier, null, 2);
 
   const schema = {
         type: Type.OBJECT,
         properties: {
             action: { type: Type.STRING, enum: ["ask", "pass", "object"] },
-            question: { type: Type.STRING },
-            reason: { type: Type.STRING }
+            question: { type: Type.STRING, description: "Your question, if action is 'ask'." },
+            reason: { type: Type.STRING, description: "Your reason, if action is 'object'." }
         },
         required: ["action"]
     };
@@ -46,14 +49,23 @@ const getDefenseActionConfig = (payload) => {
   return {
     contents: 'What is your next move?',
     config: {
-      systemInstruction: `You are a sharp defense attorney AI. Your client, ${currentCase.theAccused}, is the real culprit. Your goal is to defend them by creating reasonable doubt. It is your turn.
+      systemInstruction: `You are a sharp defense attorney AI. Your client, ${currentCase.theAccused}, is the real culprit, but you do NOT know this for a fact. You only know what is in the public dossier and what has been said in court. Your goal is to defend your client by creating reasonable doubt.
+---
+PUBLIC DOSSIER (Facts known by all):
+${publicInfo}
+---
 The current witness is ${currentWitness?.name || 'none'}. You have asked ${questionsThisTurn} questions this turn (max 10).
 The prosecutor's last question was: "${canObject ? lastQuestion.text : 'N/A'}".
 Here is the debate transcript so far:
 ---
 ${transcriptText}
 ---
-Based on the transcript, decide your next move. Respond in JSON format.`,
+Based ONLY on the public dossier and the transcript, decide your next move. Your options are:
+1.  **object**: If the prosecutor's last question was improper (e.g., leading, speculative, irrelevant), you can object. This is a high-risk move. If the judge overrules, you lose your turn. You MUST provide a 'reason'.
+2.  **ask**: Ask the current witness a question to build your case or poke holes in the prosecutor's.
+3.  **pass**: Pass the turn if you have no effective questions.
+
+Respond in JSON format.`,
       responseMimeType: "application/json",
       responseSchema: schema,
     },
@@ -63,11 +75,9 @@ Based on the transcript, decide your next move. Respond in JSON format.`,
 const getJudgeRulingConfig = (payload) => {
     const { question, reason } = payload;
     return {
-        contents: 'Your ruling?',
+        contents: `The defense objects to the question "${question}" for the reason: "${reason}". Your ruling?`,
         config: {
             systemInstruction: `You are an impartial Judge. A counsel has objected to the opposing counsel's question.
-Question: "${question}"
-Reason for objection: "${reason}"
 You must decide if the objection is valid. Respond with only one word: "Sustained" (if the question is improper) or "Overruled" (if it is a fair question).`,
         },
     };
@@ -75,6 +85,7 @@ You must decide if the objection is valid. Respond with only one word: "Sustaine
 
 const getFinalVerdictConfig = (payload) => {
     const { summary, accusationReason, currentCase } = payload;
+    const publicInfo = JSON.stringify(currentCase.publicDossier, null, 2);
     const schema = {
         type: Type.OBJECT,
         properties: {
@@ -84,15 +95,17 @@ const getFinalVerdictConfig = (payload) => {
         required: ["verdict", "reasoning"]
     };
     return {
-        contents: `Based on the summary and argument, is ${currentCase.theAccused} guilty?`,
+        contents: `Based on the public info, the summary of testimony, and the prosecutor's final argument, is ${currentCase.theAccused} guilty?`,
         config: {
-            systemInstruction: `You are an impartial Judge. Based *only* on the following debate summary and the prosecutor's final argument, you must decide if the prosecutor has proven **beyond a reasonable doubt** that ${currentCase.theAccused} is guilty.
-DEBATE SUMMARY:
+            systemInstruction: `You are an impartial Judge. Based *only* on the following information, you must decide if the prosecutor has proven **beyond a reasonable doubt** that ${currentCase.theAccused} is guilty. You do not have access to any secret knowledge.
 ---
+PUBLIC DOSSIER (Initial Facts):
+${publicInfo}
+---
+DEBATE SUMMARY (Testimony in court):
 ${summary}
 ---
-PROSECUTOR'S ARGUMENT:
----
+PROSECUTOR'S FINAL ARGUMENT:
 ${accusationReason}
 ---
 Your response must be a JSON object with two fields: "verdict" and "reasoning".

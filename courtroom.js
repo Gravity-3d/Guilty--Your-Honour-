@@ -1,4 +1,5 @@
 
+
 import { getSupabase } from './supabase-client.js';
 
 /**
@@ -175,11 +176,12 @@ function setupCourtroomUI() {
 }
 
 function displayInitialBriefing() {
-    let briefingText = `<h3>Case Briefing: ${currentCase.caseTitle}</h3>`;
-    briefingText += `${currentCase.caseOverview}\n\n`;
+    const { publicDossier, caseTitle } = currentCase;
+    let briefingText = `<h3>Case Briefing: ${caseTitle}</h3>`;
+    briefingText += `<strong>Police Report:</strong> ${publicDossier.policeReport}\n\n`;
     briefingText += `<strong>Initial Statements:</strong>\n`;
-    currentCase.characters.forEach(char => {
-        briefingText += `- <strong>${char.name} (${char.role}):</strong> "${char.initialStatement}"\n`;
+    publicDossier.initialStatements.forEach(stmt => {
+        briefingText += `- <strong>${stmt.name}:</strong> "${stmt.statement}"\n`;
     });
     addDialogueEntry({ speaker: 'System', text: briefingText, type: 'briefing' });
     addSystemMessage('The Prosecutor may call the first witness.');
@@ -284,13 +286,28 @@ async function runDefenseTurn() {
     }
     
     const defenseMove = await getDefenseAction();
-    isAiResponding = false; 
+    
+    if (defenseMove.action === 'object' && defenseMove.reason && lastQuestion.speaker === 'PROSECUTOR') {
+        addDialogueEntry({ speaker: 'Defense', text: `Objection! ${defenseMove.reason}`, type: 'defense' });
+        
+        isAiResponding = true;
+        updateUI();
 
-    if (defenseMove.action === 'object' && lastQuestion.speaker === 'PROSECUTOR' && defenseMove.reason) {
-        // Objections are not yet fully implemented for AI
-        addDialogueEntry({ speaker: 'Defense', text: defenseMove.question || "I pass.", type: 'defense' });
-        setTimeout(nextTurn, 1500);
+        const ruling = await callAiHandler('getJudgeRuling', { question: lastQuestion.text, reason: defenseMove.reason });
+        addDialogueEntry({ speaker: 'Judge', text: ruling, type: 'judge' });
+
+        if (ruling.toLowerCase().includes('sustained')) {
+            addSystemMessage("The Judge sustains the objection. The defense will proceed.");
+            lastQuestion = { speaker: null, text: null }; // Prevent re-objecting
+            setTimeout(runDefenseTurn, 1500); // Let the defense make another move
+        } else { // Overruled
+            addSystemMessage("The Judge overrules the objection. The defense forfeits its turn.");
+            isAiResponding = false;
+            setTimeout(nextTurn, 1500);
+        }
+
     } else if (defenseMove.action === 'ask' && defenseMove.question) {
+        isAiResponding = false; // Temporarily allow UI update
         const question = defenseMove.question;
         addDialogueEntry({ speaker: 'Defense', text: question, type: 'defense' });
         lastQuestion = { speaker: 'DEFENSE', text: question };
@@ -311,6 +328,7 @@ async function runDefenseTurn() {
             setTimeout(runDefenseTurn, 1000);
         }
     } else { // Pass
+        isAiResponding = false;
         addDialogueEntry({ speaker: 'Defense', text: "I pass the turn.", type: 'defense' });
         setTimeout(nextTurn, 1500);
     }
@@ -375,7 +393,7 @@ function updateUI() {
 async function handlePlayerAsk(event) {
   event.preventDefault();
   const question = interrogationInput.value.trim();
-  if (!question || !canPlayerAct()) return;
+  if (!canPlayerAct()) return;
 
   interrogationInput.value = '';
   addDialogueEntry({ speaker: 'Prosecutor', text: question, type: 'prosecutor' });

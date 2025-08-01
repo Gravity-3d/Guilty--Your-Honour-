@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from '@supabase/supabase-js';
 
@@ -7,37 +8,57 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 
 const systemInstruction = `You are a creative writer for a noir detective game. Your task is to generate a complete mystery case file as a single JSON object that strictly follows the provided schema.
 - The crimes must be lighthearted and low-stakes (e.g., stolen pies, sabotaged sculptures).
-- The case must be logically solvable by finding contradictions in witness testimonies.
-- You must generate EXACTLY TWO characters.
-- IMPORTANT: The 'theAccused' and 'theCulprit' fields MUST refer to the same character's name.
-- The culprit's 'knowledge' brief MUST contain a lie or a flimsy alibi.
-- The other character's 'knowledge' MUST directly contradict the culprit's story.`;
+- The case must be logically solvable by finding contradictions in testimonies.
+- You must generate EXACTLY 4 to 5 characters.
+- One character must be 'theCulprit'. Their 'knowledge' brief MUST contain a lie or a flimsy alibi.
+- At least one other character must be a key witness whose 'knowledge' directly contradicts the culprit's lie.
+- Other characters can be 'Red Herrings'—their knowledge might seem suspicious but is ultimately a dead end for the main crime.
+- The 'theAccused' and 'theCulprit' fields MUST refer to the same character's name.
+- The 'publicDossier' contains information available to everyone at the start.
+- The 'characters.knowledge' field contains secrets only revealed through questioning.`;
 
 const caseSchema = {
     type: Type.OBJECT,
     properties: {
         caseTitle: { type: Type.STRING, description: "A catchy, noir-style title for the case." },
         caseBrief: { type: Type.STRING, description: "A one-sentence summary of the crime to be displayed to the player." },
-        caseOverview: { type: Type.STRING, description: "A longer, 2-3 sentence paragraph detailing the crime scene and situation." },
         theCulprit: { type: Type.STRING, description: "The name of the character who is guilty." },
         theAccused: { type: Type.STRING, description: "The name of the character being accused. Must be the same as theCulprit." },
-        motive: { type: Type.STRING, description: "The culprit's reason for committing the crime." },
+        publicDossier: {
+            type: Type.OBJECT,
+            description: "Information available to all parties at the start of the game.",
+            properties: {
+                policeReport: { type: Type.STRING, description: "A 2-3 sentence paragraph detailing the crime scene and situation, written like an official police report." },
+                initialStatements: {
+                    type: Type.ARRAY,
+                    description: "An array containing the initial, one-sentence alibi or statement from each character.",
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            name: { type: Type.STRING },
+                            statement: { type: Type.STRING }
+                        },
+                        required: ["name", "statement"]
+                    }
+                }
+            },
+            required: ["policeReport", "initialStatements"]
+        },
         characters: {
             type: Type.ARRAY,
-            description: "An array of exactly two character objects.",
+            description: "An array of 4 to 5 character objects.",
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    name: { type: Type.STRING, description: "The character's full name." },
+                    name: { type: Type.STRING, description: "The character's full name. Must match a name in initialStatements." },
                     role: { type: Type.STRING, description: "The character's role in the story (e.g., 'Victim's Rival', 'Nosy Neighbor')." },
-                    initialStatement: { type: Type.STRING, description: "A brief, one-sentence statement or alibi given by the character initially." },
-                    knowledge: { type: Type.STRING, description: "A secret, detailed brief of what this character knows, to be used by the AI playing this role. For the culprit, this should contain their lie. For the other character, it should contain the information that contradicts the culprit." },
+                    knowledge: { type: Type.STRING, description: "A secret, detailed brief of what this character knows, to be used by the AI playing this role. This is HIDDEN information." },
                 },
-                required: ["name", "role", "initialStatement", "knowledge"]
+                required: ["name", "role", "knowledge"]
             }
         }
     },
-    required: ["caseTitle", "caseBrief", "caseOverview", "theCulprit", "theAccused", "motive", "characters"]
+    required: ["caseTitle", "caseBrief", "theCulprit", "theAccused", "publicDossier", "characters"]
 };
 
 
@@ -76,13 +97,16 @@ export default async (req) => {
                 systemInstruction: systemInstruction,
                 responseMimeType: "application/json",
                 responseSchema: caseSchema,
+                // Give the creator AI a generous thinking budget for high-quality cases
+                maxOutputTokens: 8192,
+                thinkingConfig: { thinkingBudget: 2048 },
             },
         });
 
         const caseData = JSON.parse(response.text);
         
-        if (!caseData.caseTitle || !caseData.characters || caseData.characters.length !== 2) {
-             throw new Error("AI failed to generate a valid case structure with exactly two characters.");
+        if (!caseData.caseTitle || !caseData.characters || caseData.characters.length < 4) {
+             throw new Error("AI failed to generate a valid case structure with at least four characters.");
         }
 
         // Update the case record with the data and set status to 'READY'
