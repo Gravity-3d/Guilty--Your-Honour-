@@ -1,5 +1,4 @@
 
-
 import { getSupabase } from './supabase-client.js';
 
 let supabase;
@@ -69,7 +68,7 @@ function pollForCaseStatus(caseId, userType) {
 
     pollingInterval = setInterval(async () => {
         try {
-            const response = await fetch(`/api/poll-case?caseId=${caseId}&userType=${userType}`);
+            const response = await fetch(`/.netlify/functions/poll-case?caseId=${caseId}&userType=${userType}`);
             if (!response.ok) {
                  throw new Error(`Server poll failed with status ${response.status}`);
             }
@@ -123,8 +122,17 @@ async function handleStartNewCase() {
     generationContainer.classList.remove('hidden');
     
     try {
-        // 2. Initiate the case generation
-        const initResponse = await fetch('/api/initiate-case', { method: 'POST' });
+        const headers = { 'Content-Type': 'application/json' };
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+
+        // 2. Initiate the case generation, passing auth token if available
+        const initResponse = await fetch('/.netlify/functions/initiate-case', { 
+            method: 'POST',
+            headers: headers
+        });
 
         if (!initResponse.ok) throw new Error(`Failed to initiate case: ${await initResponse.text()}`);
         const { caseId, userType } = await initResponse.json();
@@ -134,7 +142,7 @@ async function handleStartNewCase() {
         briefEl.textContent = 'The AI is on the job, crafting a new mystery. This may take a moment.';
 
         // 3. Trigger the background processing (fire-and-forget)
-        fetch('/api/process-case', {
+        fetch('/.netlify/functions/process-case', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ caseId, userType })

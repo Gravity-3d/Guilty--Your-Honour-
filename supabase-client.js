@@ -1,6 +1,4 @@
 
-
-
 import { createClient } from '@supabase/supabase-js';
 
 let supabaseInstance = null;
@@ -9,7 +7,7 @@ let initializePromise = null;
 async function initializeSupabase() {
     // This function is called only once to fetch the config and create the client.
     try {
-        const response = await fetch('/api/config');
+        const response = await fetch('/.netlify/functions/config');
         if (!response.ok) {
             // Try to parse the error body from the server for a more specific message
             const errorBody = await response.json().catch(() => ({ error: response.statusText }));

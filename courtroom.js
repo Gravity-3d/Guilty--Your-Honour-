@@ -1,3 +1,4 @@
+
 import { getSupabase } from './supabase-client.js';
 
 /**
@@ -79,7 +80,7 @@ async function callAiHandler(action, payload) {
       headers['Authorization'] = `Bearer ${session.access_token}`;
     }
 
-    const response = await fetch('/api/ai-handler', {
+    const response = await fetch('/.netlify/functions/ai-handler', {
       method: 'POST',
       headers: headers,
       body: JSON.stringify({ action, ...payload }),
