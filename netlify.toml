@@ -1,15 +1,40 @@
-# IMPORTANT: For these settings to work, you MUST rename this file from 'netlify.txt' to 'netlify.toml'
+# ❗❗❗ CRITICAL: RENAME THIS FILE TO 'netlify.toml' ❗❗❗
+#
+# Your API calls are failing with a 404 'Not Found' error because Netlify
+# only reads its configuration from a file named exactly 'netlify.toml'.
+# This file must be renamed for your site to work.
+#
 [build]
-  # No build command is needed. Netlify automatically detects and installs
-  # dependencies for serverless functions from the package.json file.
+  # The root directory of your project contains your index.html
   publish = "."
+  # Your serverless functions are in the netlify/functions directory
   functions = "netlify/functions"
 
-# Redirect rule for cleaner API paths. This maps requests from /api/*
-# to the corresponding function in the netlify/functions directory.
-# For example, a call to /api/initiate-case will be routed to
-# /.netlify/functions/initiate-case.
+# These are explicit redirect rules for your API.
+# This makes sure that when your app calls '/api/some-function',
+# Netlify correctly runs the code in '/netlify/functions/some-function.js'.
+
 [[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
+  from = "/api/initiate-case"
+  to = "/.netlify/functions/initiate-case"
+  status = 200
+
+[[redirects]]
+  from = "/api/process-case"
+  to = "/.netlify/functions/process-case"
+  status = 200
+
+[[redirects]]
+  from = "/api/poll-case"
+  to = "/.netlify/functions/poll-case"
+  status = 200
+
+[[redirects]]
+  from = "/api/ai-handler"
+  to = "/.netlify/functions/ai-handler"
+  status = 200
+
+[[redirects]]
+  from = "/api/config"
+  to = "/.netlify/functions/config"
   status = 200
