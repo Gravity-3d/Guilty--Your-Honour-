@@ -1,6 +1,7 @@
 # IMPORTANT: For these settings to work, you MUST rename this file from 'netlify.txt' to 'netlify.toml'
 [build]
-  command = "npm install"
+  # No build command is needed. Netlify automatically detects and installs
+  # dependencies for serverless functions from the package.json file.
   publish = "."
   functions = "netlify/functions"
 
