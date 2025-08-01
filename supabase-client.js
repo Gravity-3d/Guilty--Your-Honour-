@@ -1,4 +1,6 @@
 
+
+
 import { createClient } from '@supabase/supabase-js';
 
 let supabaseInstance = null;
