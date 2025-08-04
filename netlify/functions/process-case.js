@@ -14,7 +14,8 @@ const systemInstruction = `You are a creative writer for a noir detective game. 
 - Other characters can be 'Red Herrings'—their knowledge might seem suspicious but is ultimately a dead end for the main crime.
 - The 'theAccused' and 'theCulprit' fields MUST refer to the same character's name.
 - The 'publicDossier' contains information available to everyone at the start.
-- The 'characters.knowledge' field contains secrets only revealed through questioning.`;
+- The 'characters.knowledge' field contains secrets only revealed through questioning.
+- The 'characters.role' field is public information. It should describe the character's job or relationship to the case (e.g., "Victim", "Chef", "Key Witness", "Neighbor"). This field MUST NOT reveal that a character is the culprit. Do not use roles like "The Culprit".`;
 
 const caseSchema = {
     type: Type.OBJECT,
