@@ -201,7 +201,7 @@ async function saveTranscriptEntry({ speaker, text, type }) {
 
 async function getWitnessResponse(question) {
   const response = await callAiHandler('getWitnessResponse', { currentWitness, question });
-  return response || "I... I can't think right now. There seems to be a technical problem.";
+  return response;
 }
 
 async function getDefenseAction() {
@@ -344,26 +344,35 @@ function updateUI() {
 async function handlePlayerAsk(event) {
   event.preventDefault();
   const question = interrogationInput.value.trim();
-  if (!canPlayerAct()) return;
+  if (!canPlayerAct() || !question) return;
 
   interrogationInput.value = '';
   addDialogueEntry({ speaker: 'Prosecutor', text: question, type: 'prosecutor' });
   lastQuestion = { speaker: 'PROSECUTOR', text: question };
-  questionsThisTurn++;
 
   isAiResponding = true;
   updateUI();
 
   const aiResponse = await getWitnessResponse(question);
-  addDialogueEntry({ speaker: currentWitness.name, text: aiResponse, type: 'witness' });
 
-  isAiResponding = false;
-  if (questionsThisTurn >= MAX_QUESTIONS_PER_TURN) {
-    addSystemMessage("You have reached your question limit.");
-    nextTurn();
+  if (aiResponse) {
+    addDialogueEntry({ speaker: currentWitness.name, text: aiResponse, type: 'witness' });
+    questionsThisTurn++; // Only increment the counter on a successful response.
+
+    isAiResponding = false;
+    if (questionsThisTurn >= MAX_QUESTIONS_PER_TURN) {
+      addSystemMessage("You have reached your question limit.");
+      nextTurn();
+    } else {
+      updateUI();
+    }
   } else {
-    updateUI();
+    // AI call failed. callAiHandler already adds a system message.
+    // This message clarifies that the question was not counted.
+    addSystemMessage("Your question was not counted due to a technical error. Please ask again.");
+    // The UI state (isAiResponding=false, UI updated) is handled in callAiHandler's catch block.
   }
+
   interrogationInput.focus();
 }
 
