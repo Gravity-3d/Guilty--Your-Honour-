@@ -357,8 +357,7 @@ async function handlePlayerAsk(event) {
 
   if (aiResponse) {
     addDialogueEntry({ speaker: currentWitness.name, text: aiResponse, type: 'witness' });
-    questionsThisTurn++; // Only increment the counter on a successful response.
-
+    questionsThisTurn++;
     isAiResponding = false;
     if (questionsThisTurn >= MAX_QUESTIONS_PER_TURN) {
       addSystemMessage("You have reached your question limit.");
@@ -367,10 +366,7 @@ async function handlePlayerAsk(event) {
       updateUI();
     }
   } else {
-    // AI call failed. callAiHandler already adds a system message.
-    // This message clarifies that the question was not counted.
     addSystemMessage("Your question was not counted due to a technical error. Please ask again.");
-    // The UI state (isAiResponding=false, UI updated) is handled in callAiHandler's catch block.
   }
 
   interrogationInput.focus();

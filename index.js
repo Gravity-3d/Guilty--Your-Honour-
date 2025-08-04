@@ -47,7 +47,6 @@ function displayCaseData(caseData) {
     caseData.characters.forEach(char => {
         const li = document.createElement('li');
         li.className = 'character-dossier';
-        // Removed Role and Initial Statement to avoid spoilers and fix bugs.
         li.innerHTML = `<h4>${char.name}</h4>`;
         charactersListEl.appendChild(li);
     });
