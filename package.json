@@ -1,9 +1,0 @@
-{
-  "name": "case-closed-ai-detective-backend",
-  "version": "1.0.0",
-  "description": "Server-side dependencies for Netlify Functions",
-  "dependencies": {
-    "@google/genai": "^1.11.0",
-    "@supabase/supabase-js": "^2.43.5"
-  }
-}
