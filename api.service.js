@@ -1,73 +1,35 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import { CONFIG } from './constants.js';
-
 /**
  * API SERVICE
- * Handles communication with the Google Gemini API.
+ * Communicates with the Netlify Serverless Backend.
  */
 export const APIService = {
-    _ai: null,
+    async _callFunction(action, payload = {}) {
+        const response = await fetch('/.netlify/functions/gemini', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, payload })
+        });
 
-    getClient() {
-        // ALWAYS use process.env.API_KEY as per mandatory guidelines.
-        // It will be replaced by a real string during the Netlify build process
-        // or provided by the aistudio environment.
-        return new GoogleGenAI({ apiKey: process.env.API_KEY });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Serverless Function Error');
+        }
+
+        return await response.json();
     },
 
     async generateMystery() {
-        const ai = this.getClient();
-        const response = await ai.models.generateContent({
-            model: CONFIG.AI_MODEL,
-            contents: CONFIG.PROMPTS.MYSTERY_GEN,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        caseTitle: { type: Type.STRING },
-                        caseId: { type: Type.STRING },
-                        scene: { type: Type.STRING },
-                        victim: { type: Type.STRING },
-                        suspects: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    name: { type: Type.STRING },
-                                    motive: { type: Type.STRING },
-                                    alibi: { type: Type.STRING }
-                                },
-                                required: ["name", "motive", "alibi"]
-                            }
-                        },
-                        evidence: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        guiltyParty: { type: Type.STRING },
-                        logic: { type: Type.STRING }
-                    },
-                    required: ["caseTitle", "caseId", "scene", "victim", "suspects", "evidence", "guiltyParty", "logic"]
-                }
-            }
-        });
-        return JSON.parse(response.text);
+        // Returns the full JSON object directly from the function
+        return await this._callFunction('generateMystery');
     },
 
     async fetchInterrogation(name, alibi) {
-        const ai = this.getClient();
-        const response = await ai.models.generateContent({
-            model: CONFIG.AI_MODEL,
-            contents: CONFIG.PROMPTS.INTERROGATION(name, alibi)
-        });
-        return response.text;
+        const result = await this._callFunction('interrogate', { name, alibi });
+        return result.text;
     },
 
     async fetchVerdict(accused, killer, logic, isCorrect) {
-        const ai = this.getClient();
-        const prompt = `Noir trial resolution. Accused: ${accused}. Killer: ${killer}. Logic: ${logic}. Outcome: ${isCorrect ? 'Justice' : 'Mistrial'}. Write exactly 3 dramatic sentences in noir style.`;
-        const response = await ai.models.generateContent({
-            model: CONFIG.AI_MODEL,
-            contents: prompt
-        });
-        return response.text;
+        const result = await this._callFunction('verdict', { accused, killer, logic, isCorrect });
+        return result.text;
     }
 };
