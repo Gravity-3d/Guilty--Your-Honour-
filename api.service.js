@@ -10,14 +10,28 @@ export const APIService = {
 
     getClient() {
         if (!this._ai) {
-            // In pure JS modules, process.env.API_KEY is usually replaced by the build tool (e.g. Vite/Esbuild)
-            this._ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            // By the time this runs, window.process is defined by the script in index.html
+            const apiKey = (process.env && process.env.API_KEY) ? process.env.API_KEY : '';
+
+            if (!apiKey) {
+                console.warn("Gemini API key is empty. Ensure process.env.API_KEY is configured in your hosting environment.");
+            }
+
+            try {
+                // Instruction: Always use process.env.API_KEY directly
+                this._ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            } catch (e) {
+                console.error("Initialization failed:", e);
+                this._ai = null;
+            }
         }
         return this._ai;
     },
 
     async generateMystery() {
         const client = this.getClient();
+        if (!client || !process.env.API_KEY) throw new Error("AI_NOT_INITIALIZED");
+
         const response = await client.models.generateContent({
             model: CONFIG.AI_MODEL,
             contents: CONFIG.PROMPTS.MYSTERY_GEN,
@@ -55,6 +69,8 @@ export const APIService = {
 
     async fetchInterrogation(name, alibi) {
         const client = this.getClient();
+        if (!client || !process.env.API_KEY) return "The suspect refuses to speak. (System configuration error).";
+
         const response = await client.models.generateContent({
             model: CONFIG.AI_MODEL,
             contents: CONFIG.PROMPTS.INTERROGATION(name, alibi)
@@ -64,6 +80,8 @@ export const APIService = {
 
     async fetchVerdict(accused, killer, logic, isCorrect) {
         const client = this.getClient();
+        if (!client || !process.env.API_KEY) return "The jury is stuck in a deadlock. (Connection error).";
+
         const prompt = `Noir trial resolution. Accused: ${accused}. Killer: ${killer}. Logic: ${logic}. Outcome: ${isCorrect ? 'Justice' : 'Mistrial'}. Write exactly 3 dramatic sentences in noir style.`;
         const response = await client.models.generateContent({
             model: CONFIG.AI_MODEL,
