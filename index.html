@@ -9,310 +9,108 @@
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
     <style>
         :root {
-            --charcoal: #121212;
-            --oxblood: #800000;
-            --gold: #D4AF37;
-            --paper: #f4f1ea;
-            --text-light: #e0e0e0;
+            --charcoal: #0a0a0a;
+            --oxblood: #660000;
+            --gold: #c5a028;
+            --paper: #ece8df;
+            --text-light: #d1d1d1;
+            --success: #1e8449;
         }
 
         body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: var(--charcoal);
-            color: var(--text-light);
-            font-family: 'Courier Prime', monospace;
-            overflow: hidden;
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: var(--charcoal); color: var(--text-light);
+            font-family: 'Courier Prime', monospace; overflow: hidden;
         }
 
-        #game-container {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            background: radial-gradient(circle, #1a1a1a 0%, #000 100%);
-        }
+        #atmosphere-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; opacity: 0.4; }
+        #game-container { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; z-index: 5; }
 
-        /* Vignette effect */
-        #game-container::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            box-shadow: inset 0 0 200px rgba(0,0,0,0.9);
-        }
+        .screen { display: none; width: 100%; height: 100%; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; box-sizing: border-box; position: absolute; }
+        .screen.active { display: flex; }
 
-        .screen {
-            display: none;
-            width: 100%;
-            height: 100%;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 10;
-        }
+        .btn { background: rgba(0,0,0,0.5); border: 1px solid var(--gold); color: var(--gold); padding: 1rem 2rem; cursor: pointer; text-transform: uppercase; letter-spacing: 2px; font-family: inherit; }
+        .btn:hover:not(:disabled) { background: var(--gold); color: var(--charcoal); }
+        .btn:disabled { opacity: 0.2; cursor: not-allowed; }
 
-        .screen.active {
-            display: flex;
-        }
+        .case-file { background: var(--paper); color: #222; width: 90%; max-width: 900px; height: 80vh; padding: 4rem; overflow-y: auto; border: 1px solid #ddd; box-shadow: 10px 10px 0px rgba(0,0,0,0.5); }
+        
+        .suspect-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem; }
+        .suspect-card { border: 1px solid #bbb; padding: 1.5rem; cursor: pointer; background: rgba(0,0,0,0.02); transition: all 0.2s ease; }
+        .suspect-card.selected { border: 3px solid var(--oxblood); background: rgba(102, 0, 0, 0.05); }
 
-        /* Title Screen Styles */
-        #title-screen h1 {
-            font-family: 'Playfair Display', serif;
-            font-size: 5rem;
-            margin: 0;
-            text-transform: uppercase;
-            letter-spacing: 0.2rem;
-            text-align: center;
-        }
+        .verdict-stamp { font-size: 5rem; font-weight: 900; border: 10px solid; padding: 1rem 3rem; transform: rotate(-10deg); margin-bottom: 2rem; opacity: 0; }
+        .stamp-visible { opacity: 0.8; animation: stampSlam 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes stampSlam { 0% { transform: rotate(-10deg) scale(2); opacity: 0; } 100% { transform: rotate(-10deg) scale(1); opacity: 0.8; } }
+        .stamp-guilty { color: var(--success); border-color: var(--success); }
+        .stamp-mistrial { color: var(--oxblood); border-color: var(--oxblood); }
 
-        .title-guilty {
-            color: var(--oxblood);
-            display: block;
-            font-weight: 900;
-            filter: drop-shadow(0 0 10px rgba(128, 0, 0, 0.5));
-            animation: slam 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-        }
+        .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; display: none; justify-content: center; align-items: center; z-index: 1000; flex-direction: column; }
+        .loading-spinner { width: 50px; height: 50px; border: 2px solid #333; border-top: 2px solid var(--gold); border-radius: 50%; animation: spin 0.8s infinite linear; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
 
-        .title-honour {
-            color: var(--gold);
-            font-family: 'Playfair Display', serif;
-            font-style: italic;
-            font-size: 2.5rem;
-            display: block;
-            margin-top: -10px;
-            opacity: 0;
-            animation: fadeIn 1.5s ease 0.6s forwards;
-        }
-
-        @keyframes slam {
-            0% { transform: scale(5); opacity: 0; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .menu-options {
-            margin-top: 3rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-            opacity: 0;
-            animation: fadeIn 1s ease 1.5s forwards;
-        }
-
-        .btn {
-            background: transparent;
-            border: 1px solid var(--gold);
-            color: var(--gold);
-            padding: 1rem 2.5rem;
-            font-family: 'Courier Prime', monospace;
-            font-size: 1.2rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.1rem;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .btn:hover {
-            background: var(--gold);
-            color: var(--charcoal);
-            box-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
-        }
-
-        /* Investigation Screen */
-        #investigation-screen {
-            padding: 2rem;
-            box-sizing: border-box;
-            justify-content: flex-start;
-        }
-
-        .investigation-header {
-            width: 100%;
-            border-bottom: 2px solid var(--gold);
-            padding-bottom: 1rem;
-            margin-bottom: 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-        }
-
-        .case-file {
-            background: var(--paper);
-            color: #333;
-            width: 90%;
-            max-width: 800px;
-            min-height: 70vh;
-            padding: 3rem;
-            box-shadow: 10px 10px 30px rgba(0,0,0,0.5);
-            position: relative;
-            overflow-y: auto;
-            border-radius: 2px;
-        }
-
-        .case-file::before {
-            content: 'CONFIDENTIAL';
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            border: 3px solid #c0392b;
-            color: #c0392b;
-            padding: 5px 15px;
-            font-weight: bold;
-            transform: rotate(15deg);
-            opacity: 0.7;
-        }
-
-        .case-content {
-            line-height: 1.6;
-            white-space: pre-wrap;
-        }
-
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.9);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-            flex-direction: column;
-        }
-
-        .loading-spinner {
-            width: 50px;
-            height: 50px;
-            border: 3px solid var(--gold);
-            border-top: 3px solid transparent;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .loading-text {
-            margin-top: 1rem;
-            color: var(--gold);
-            font-size: 0.9rem;
-            letter-spacing: 0.2rem;
-        }
-
-        /* Rules Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.85);
-            z-index: 200;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .modal-content {
-            background: var(--paper);
-            color: #333;
-            padding: 2rem;
-            max-width: 600px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-            border: 4px double var(--gold);
-        }
-
-        .modal-content h2 {
-            font-family: 'Playfair Display', serif;
-            border-bottom: 2px solid #333;
-            padding-bottom: 0.5rem;
-        }
-
-        .close-modal {
-            float: right;
-            cursor: pointer;
-            font-size: 1.5rem;
-            font-weight: bold;
-        }
-
+        .film-grain { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: url('https://www.transparenttextures.com/patterns/stardust.png'); opacity: 0.05; pointer-events: none; z-index: 999; }
+        
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--paper); }
+        ::-webkit-scrollbar-thumb { background: #ccc; }
+        ::-webkit-scrollbar-thumb:hover { background: #999; }
     </style>
-<script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://esm.sh/@google/genai@^1.37.0"
-  }
-}
-</script>
+    <script type="importmap">
+    {
+      "imports": {
+        "@google/genai": "https://esm.sh/@google/genai@^1.37.0"
+      }
+    }
+    </script>
 </head>
 <body>
+    <canvas id="atmosphere-canvas"></canvas>
+    <div class="film-grain"></div>
+
     <div id="game-container">
-        <!-- Loading Overlay -->
         <div id="loading-overlay" class="loading-overlay">
             <div class="loading-spinner"></div>
-            <p id="loading-message" class="loading-text">PREPARING THE DOSSIER...</p>
+            <p id="loading-message" style="color: var(--gold); margin-top: 1rem; font-size: 0.8rem; letter-spacing: 2px;">COLLECTING CLUES...</p>
         </div>
 
-        <!-- Title Screen -->
-        <section id="title-screen" class="screen active">
-            <h1>
-                <span class="title-guilty">Guilty!</span>
-                <span class="title-honour">Your Honour</span>
-            </h1>
-            <div class="menu-options">
-                <button class="btn" id="start-btn">Start Investigation</button>
-                <button class="btn" id="rules-btn">Courtroom Rules</button>
-                <button class="btn" id="locker-btn" disabled style="opacity: 0.5; cursor: not-allowed;">Evidence Locker (Locked)</button>
+        <section id="title-screen" class="screen">
+            <h1 style="font-size: 5rem; color: var(--oxblood); margin: 0;">GUILTY!</h1>
+            <h2 style="font-size: 2rem; color: var(--gold); font-style: italic; margin: 0 0 3rem 0;">Your Honour</h2>
+            <div style="display: flex; flex-direction: column; gap: 1rem; width: 300px;">
+                <button class="btn" id="start-btn">New Investigation</button>
             </div>
         </section>
 
-        <!-- Investigation Screen -->
         <section id="investigation-screen" class="screen">
-            <div class="investigation-header">
-                <span id="case-id" style="color: var(--gold)">CASE #000-PENDING</span>
-                <button class="btn" id="back-to-menu" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Exit Case</button>
+            <div style="width: 90%; max-width: 900px; display: flex; justify-content: space-between; margin-bottom: 1rem;">
+                <span id="case-id" style="color: var(--gold); font-size: 0.8rem;">#PENDING</span>
+                <button class="btn" id="exit-case-btn" style="padding: 0.5rem 1rem; font-size: 0.6rem;">Abandon File</button>
             </div>
             <div class="case-file">
-                <h2 style="text-align: center; text-decoration: underline;">MURDER INVESTIGATION REPORT</h2>
-                <div id="investigation-content" class="case-content">
-                    <!-- Case details will be injected here -->
-                </div>
-                <div style="margin-top: 3rem; border-top: 1px dashed #999; padding-top: 1rem; display: flex; justify-content: center;">
-                    <button class="btn" id="proceed-to-court" style="color: var(--oxblood); border-color: var(--oxblood);">Proceed to Courtroom</button>
-                </div>
+                <div id="investigation-content"></div>
+                <button class="btn" id="proceed-to-court-btn" style="width: 100%; margin-top: 2rem;">Proceed to Trial</button>
             </div>
         </section>
 
-        <!-- Rules Modal -->
-        <div id="rules-modal" class="modal">
-            <div class="modal-content">
-                <span class="close-modal" id="close-rules">&times;</span>
-                <h2>Rules of the Court</h2>
-                <p>1. <strong>The Investigation:</strong> You will be presented with a murder mystery. Read the dossier carefully. Note the victims, suspects, and clues.</p>
-                <p>2. <strong>The Evidence:</strong> Key details are hidden in the narrative. Trust no one's testimony without verification.</p>
-                <p>3. <strong>The Verdict:</strong> Once you enter the courtroom, you must present your findings. Accuse the wrong person, and justice will not be served.</p>
-                <p>4. <strong>The Burden of Proof:</strong> You are the lead investigator. The prosecution relies on you to find the smoking gun.</p>
-                <button class="btn" id="close-rules-btn" style="margin-top: 1rem; width: 100%;">Understood</button>
+        <section id="courtroom-screen" class="screen">
+            <div class="case-file">
+                <h2 style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 1rem;">COURT TRANSCRIPT</h2>
+                <div id="court-dialogue" style="background: rgba(0,0,0,0.05); padding: 1.5rem; min-height: 100px; margin: 1rem 0; font-style: italic; border-left: 4px solid var(--oxblood);">
+                    Cross-examine a suspect to begin.
+                </div>
+                <div id="suspect-selection" class="suspect-grid"></div>
+                <button class="btn" id="deliver-verdict-btn" disabled style="width: 100%; margin-top: 2rem;">Deliver Verdict</button>
             </div>
-        </div>
+        </section>
+
+        <section id="verdict-screen" class="screen">
+            <div id="verdict-stamp-container"></div>
+            <div class="case-file" style="height: auto; text-align: center; min-height: 300px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                <div id="verdict-text" style="line-height: 1.8; font-size: 1.2rem; margin-bottom: 2rem;"></div>
+                <button class="btn" id="return-menu-btn">Close File</button>
+            </div>
+        </section>
     </div>
 
     <script type="module" src="index.js"></script>
