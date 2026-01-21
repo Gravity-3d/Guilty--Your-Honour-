@@ -1,3 +1,13 @@
+/**
+ * ENVIRONMENT SHIM
+ * Must be at the very top. Defines 'process' so the browser doesn't throw ReferenceError.
+ * In a real Netlify deploy with a build command, the text 'process.env.API_KEY' 
+ * will be replaced by the actual key string.
+ */
+if (typeof process === 'undefined') {
+    globalThis.process = { env: { API_KEY: '' } };
+}
+
 import { DB } from './db.js';
 import { STATE_KEYS } from './constants.js';
 import { CaseService } from './case.service.js';
@@ -6,36 +16,27 @@ import { UIManager } from './ui.manager.js';
 import { NoirProKit } from './noir-pro-kit.js';
 
 /**
- * ENVIRONMENT POLYFILL
- * Ensures process.env.API_KEY does not throw ReferenceError in browser environments.
- */
-if (typeof process === 'undefined') {
-    globalThis.process = { env: { API_KEY: '' } };
-}
-
-/**
  * MAIN GAME ORCHESTRATOR
  */
 const Game = {
     async start() {
-        UIManager.setLoading(true, "BOOTING SYSTEM...");
+        UIManager.setLoading(true, "POWERING ON...");
         
         try {
-            // 1. Initialize modular subsystems
             await DB.init();
             UIManager.init();
             NoirProKit.State.init({ currentCase: null });
             
-            // 2. API Key Check (Mandatory for Gemini)
-            const hasKey = process.env.API_KEY && process.env.API_KEY.length > 0;
-            const studioAuth = window.aistudio ? await window.aistudio.hasSelectedApiKey() : false;
+            // 1. Check if we have an API key available via any method
+            const hasInjectedKey = process.env.API_KEY && process.env.API_KEY.length > 5;
+            const hasSelectedKey = window.aistudio ? await window.aistudio.hasSelectedApiKey() : false;
 
-            if (!hasKey && !studioAuth) {
-                this.showKeyRequirement();
+            if (!hasInjectedKey && !hasSelectedKey) {
+                this.showAuthRequirement();
                 return;
             }
 
-            // 3. Check for existing session/case in DB
+            // 2. Resume or Start
             const existing = await CaseService.getActiveCase();
             if (existing) {
                 UIManager.renderDossier(existing);
@@ -53,32 +54,37 @@ const Game = {
         }
     },
 
-    showKeyRequirement() {
+    showAuthRequirement() {
         UIManager.transitionTo(STATE_KEYS.TITLE);
         const titleScreen = document.getElementById('title-screen');
         const startBtn = document.getElementById('start-btn');
-        
         if (startBtn) startBtn.style.display = 'none';
-        
+
+        // Check if an auth UI already exists
+        if (document.getElementById('auth-badge-container')) return;
+
         const authContainer = document.createElement('div');
-        authContainer.style.marginTop = '2rem';
-        authContainer.style.textAlign = 'center';
+        authContainer.id = 'auth-badge-container';
+        authContainer.style.cssText = 'margin-top: 2rem; text-align: center; animation: fadeIn 1s ease;';
         authContainer.innerHTML = `
-            <p style="color: var(--gold); font-size: 0.8rem; margin-bottom: 1rem;">DETECTIVE BADGE NOT FOUND</p>
-            <button class="btn" id="activate-badge-btn">Activate Badge (Select API Key)</button>
-            <p style="font-size: 0.6rem; margin-top: 1rem; opacity: 0.6;">
-                <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" style="color: var(--gold);">Billing Documentation</a>
-            </p>
+            <div style="border: 1px solid var(--gold); padding: 2rem; background: rgba(0,0,0,0.4);">
+                <p style="color: var(--gold); font-size: 0.7rem; letter-spacing: 3px; margin-bottom: 1.5rem;">DETECTIVE BADGE INACTIVE</p>
+                <button class="btn" id="activate-badge-btn">Unlock Badge (API Key)</button>
+                <p style="font-size: 0.6rem; margin-top: 1.5rem; opacity: 0.5;">
+                    Required for the Logic Engine (Gemini API).<br>
+                    <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" style="color: var(--gold); text-decoration: none; border-bottom: 1px solid;">Billing Info</a>
+                </p>
+            </div>
         `;
         titleScreen.appendChild(authContainer);
 
         document.getElementById('activate-badge-btn').onclick = async () => {
             if (window.aistudio) {
                 await window.aistudio.openSelectKey();
-                // Assume success and reload
+                // Per guidelines, assume success and proceed to reload/re-init
                 window.location.reload();
             } else {
-                alert("Environment does not support automatic key selection. Please check your process.env.API_KEY configuration.");
+                alert("Environment not recognized. If on Netlify, ensure your Build Command replaces process.env.API_KEY.");
             }
         };
     },
@@ -112,12 +118,12 @@ const Game = {
             UIManager.renderDossier(mystery);
             UIManager.transitionTo(STATE_KEYS.INVESTIGATION);
         } catch (e) {
-            console.error(e);
+            console.error("Mystery Gen Error:", e);
             if (e.message.includes("404") || e.message.includes("not found")) {
-                alert("API Key invalid or expired. Please re-activate badge.");
+                alert("The Detective's credentials (API Key) are invalid. Resetting badge...");
                 if (window.aistudio) await window.aistudio.openSelectKey();
             } else {
-                alert("Case file could not be generated. Check connection.");
+                alert("The informant vanished. Check your connection.");
             }
         } finally {
             UIManager.setLoading(false);

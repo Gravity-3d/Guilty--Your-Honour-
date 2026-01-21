@@ -9,7 +9,9 @@ export const APIService = {
     _ai: null,
 
     getClient() {
-        // Create a new instance right before use to ensure updated API key access
+        // ALWAYS use process.env.API_KEY as per mandatory guidelines.
+        // It will be replaced by a real string during the Netlify build process
+        // or provided by the aistudio environment.
         return new GoogleGenAI({ apiKey: process.env.API_KEY });
     },
 
